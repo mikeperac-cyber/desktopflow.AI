@@ -1,0 +1,490 @@
+use std::{thread, time::Duration};
+
+use serde::Deserialize;
+use tauri::{AppHandle, Manager, State};
+use tauri_plugin_autostart::ManagerExt;
+
+use crate::{
+    ai::{self, AiProviderKind, PlanRequest, PlanningResult, ProviderCatalog},
+    context::{self, WindowContextSnapshot},
+    error::{AppError, AppResult},
+    executor::{self, ExecutionReport},
+    highlight::{self, TargetHighlight},
+    hotkeys,
+    runtime::{RuntimeState, RuntimeStatus},
+    settings::{self, AppSettings},
+    uia::{self, UiAutomationSnapshot},
+    windows, workflow,
+};
+
+#[derive(Debug, Deserialize)]
+pub struct ExecutePlanRequest {
+    provider_request_id: String,
+    surface: String,
+    confirmed: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ProviderCredentialRequest {
+    provider: AiProviderKind,
+    api_key: String,
+}
+
+#[tauri::command]
+pub fn get_app_settings(state: State<'_, RuntimeState>) -> AppSettings {
+    state.settings()
+}
+
+#[tauri::command]
+pub fn get_runtime_status(state: State<'_, RuntimeState>) -> RuntimeStatus {
+    state.status()
+}
+
+#[tauri::command]
+pub fn get_last_window_context(state: State<'_, RuntimeState>) -> Option<WindowContextSnapshot> {
+    state.window_context()
+}
+
+#[tauri::command]
+pub fn get_last_ui_automation(state: State<'_, RuntimeState>) -> Option<UiAutomationSnapshot> {
+    state.ui_automation()
+}
+
+#[tauri::command]
+pub fn get_ai_provider_status(state: State<'_, RuntimeState>) -> AppResult<ProviderCatalog> {
+    ai::provider_catalog(state.settings().ai_provider)
+}
+
+#[tauri::command]
+pub fn save_ai_provider_credential(
+    state: State<'_, RuntimeState>,
+    request: ProviderCredentialRequest,
+) -> AppResult<ProviderCatalog> {
+    ai::save_provider_credential(request.provider, &request.api_key)?;
+    ai::provider_catalog(state.settings().ai_provider)
+}
+
+#[tauri::command]
+pub fn delete_ai_provider_credential(
+    state: State<'_, RuntimeState>,
+    provider: AiProviderKind,
+) -> AppResult<ProviderCatalog> {
+    ai::delete_provider_credential(provider)?;
+    ai::provider_catalog(state.settings().ai_provider)
+}
+
+#[tauri::command]
+pub fn get_last_action_plan(state: State<'_, RuntimeState>) -> Option<PlanningResult> {
+    state.action_plan()
+}
+
+#[tauri::command]
+pub fn hide_window(app: AppHandle, label: String) -> AppResult<()> {
+    windows::hide_known_window(&app, &label)
+}
+
+#[tauri::command]
+pub async fn capture_active_window(app: AppHandle) -> AppResult<WindowContextSnapshot> {
+    highlight::hide(&app)?;
+    windows::hide_known_window(&app, "settings")?;
+
+    let capture = match tauri::async_runtime::spawn_blocking(|| {
+        thread::sleep(Duration::from_millis(350));
+        context::capture_foreground_context()
+    })
+    .await
+    {
+        Ok(result) => result,
+        Err(error) => Err(AppError::Context(format!(
+            "the capture worker stopped: {error}"
+        ))),
+    };
+
+    let restore_result = windows::show_settings(&app);
+    match capture {
+        Ok(snapshot) => {
+            app.state::<RuntimeState>()
+                .set_window_context(snapshot.clone());
+            restore_result?;
+            Ok(snapshot)
+        }
+        Err(error) => {
+            app.state::<RuntimeState>()
+                .set_context_warning(error.to_string());
+            restore_result?;
+            Err(error)
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn inspect_target_ui(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+) -> AppResult<UiAutomationSnapshot> {
+    highlight::hide(&app)?;
+    let context = state.window_context().ok_or_else(|| {
+        AppError::UiAutomation(
+            "Capture an active application before opening the UI tree.".to_string(),
+        )
+    })?;
+
+    let snapshot =
+        tauri::async_runtime::spawn_blocking(move || uia::inspect_captured_window(&context))
+            .await
+            .map_err(|error| {
+                AppError::UiAutomation(format!("the inspection worker stopped: {error}"))
+            })??;
+
+    state.set_ui_automation(snapshot.clone());
+    Ok(snapshot)
+}
+
+#[tauri::command]
+pub fn highlight_ui_element(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    element_id: String,
+) -> AppResult<TargetHighlight> {
+    let snapshot = state.ui_automation().ok_or_else(|| {
+        AppError::Highlight("Inspect the target interface before selecting a control.".to_string())
+    })?;
+    let target = highlight::resolve(&snapshot, &element_id)?;
+    highlight::show(&app, &target)?;
+    Ok(target)
+}
+
+#[tauri::command]
+pub fn clear_target_highlight(app: AppHandle) -> AppResult<()> {
+    highlight::hide(&app)
+}
+
+#[tauri::command]
+pub fn set_overlay_plan_mode(app: AppHandle, expanded: bool) -> AppResult<()> {
+    windows::set_overlay_plan_mode(&app, expanded)
+}
+
+#[tauri::command]
+pub async fn create_action_plan(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    request: PlanRequest,
+) -> AppResult<PlanningResult> {
+    highlight::hide(&app)?;
+    request.validate()?;
+
+    let context = state.window_context().ok_or_else(|| {
+        AppError::AiConfiguration(
+            "Open DeskFlow over a target application or capture one in Advanced settings first."
+                .to_string(),
+        )
+    })?;
+
+    let automation = if let Some(snapshot) = state.ui_automation() {
+        snapshot
+    } else {
+        let inspection_context = context.clone();
+        let snapshot = tauri::async_runtime::spawn_blocking(move || {
+            uia::inspect_captured_window(&inspection_context)
+        })
+        .await
+        .map_err(|error| {
+            AppError::UiAutomation(format!("the planning inspection worker stopped: {error}"))
+        })??;
+        state.set_ui_automation(snapshot.clone());
+        snapshot
+    };
+
+    let provider_kind = state.settings().ai_provider;
+    let provider = ai::create_provider(provider_kind)?;
+    let stored_request = request.clone();
+    let result = provider
+        .create_plan(ai::ProviderPlanningInput {
+            request,
+            context,
+            automation,
+            recovery: None,
+        })
+        .await?;
+    state.set_action_plan(stored_request, result.clone());
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn execute_action_plan(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    request: ExecutePlanRequest,
+) -> AppResult<ExecutionReport> {
+    if !request.confirmed {
+        return Err(AppError::ExecutionPolicy(
+            "execution requires an explicit confirmation.".to_string(),
+        ));
+    }
+    if !matches!(request.surface.as_str(), "overlay" | "settings") {
+        return Err(AppError::ExecutionPolicy(
+            "the execution surface is not allowlisted.".to_string(),
+        ));
+    }
+    if state.status().paused {
+        return Err(AppError::ExecutionPolicy(
+            "DeskFlow is paused. Resume it from the tray before running a plan.".to_string(),
+        ));
+    }
+    if !state.begin_execution() {
+        return Err(AppError::ExecutionPolicy(
+            "another plan is already executing.".to_string(),
+        ));
+    }
+
+    let result = async {
+        let mut planning_result = state.action_plan().ok_or_else(|| {
+            AppError::ExecutionPolicy("there is no current validated plan.".to_string())
+        })?;
+        let provider_kind = AiProviderKind::from_id(&planning_result.provider)?;
+        if request.provider_request_id.trim().is_empty()
+            || request.provider_request_id != planning_result.provider_request_id
+        {
+            return Err(AppError::ExecutionPolicy(
+                "the displayed plan is stale. Generate a new plan before running it.".to_string(),
+            ));
+        }
+        let original_request = state.plan_request().ok_or_else(|| {
+            AppError::ExecutionPolicy(
+                "the instruction for this plan is no longer available. Generate a new plan."
+                    .to_string(),
+            )
+        })?;
+        let mut context = state.window_context().ok_or_else(|| {
+            AppError::ExecutionPolicy("the captured target is no longer available.".to_string())
+        })?;
+        let mut automation = state.ui_automation().ok_or_else(|| {
+            AppError::ExecutionPolicy("the inspected target is no longer available.".to_string())
+        })?;
+        let settings = state.settings();
+
+        highlight::hide(&app)?;
+        windows::hide_known_window(&app, &request.surface)?;
+        let maximum_actions = usize::from(settings.maximum_autonomous_steps);
+        let mut aggregate: Option<ExecutionReport> = None;
+        loop {
+            let used_actions = aggregate
+                .as_ref()
+                .map_or(0, |report| report.step_results.len());
+            let remaining_actions = maximum_actions.saturating_sub(used_actions);
+            if remaining_actions == 0 {
+                if let Some(report) = &mut aggregate {
+                    workflow::mark_recovery_failure(
+                        report,
+                        "The total autonomous action limit was reached.".to_string(),
+                    );
+                    break;
+                }
+                return Err(AppError::ExecutionPolicy(
+                    "the autonomous action limit is zero.".to_string(),
+                ));
+            }
+
+            let execution_context = context.clone();
+            let execution_automation = automation.clone();
+            let execution_plan = planning_result.plan.clone();
+            let execution = match tauri::async_runtime::spawn_blocking(move || {
+                thread::sleep(Duration::from_millis(180));
+                executor::execute_plan(
+                    &execution_context,
+                    &execution_automation,
+                    &execution_plan,
+                    remaining_actions,
+                    settings.execution_delay_ms,
+                )
+            })
+            .await
+            {
+                Ok(Ok(report)) => report,
+                Ok(Err(error)) => {
+                    if let Some(report) = &mut aggregate {
+                        workflow::mark_recovery_failure(report, error.to_string());
+                        break;
+                    }
+                    return Err(error);
+                }
+                Err(error) => {
+                    let message = format!("the execution worker stopped: {error}");
+                    if let Some(report) = &mut aggregate {
+                        workflow::mark_recovery_failure(report, message);
+                        break;
+                    }
+                    return Err(AppError::Execution(message));
+                }
+            };
+            aggregate = Some(workflow::merge_attempt(aggregate, execution));
+            let report = aggregate.as_ref().expect("attempt report was just stored");
+            if report.status == executor::ExecutionStatus::Completed
+                || !workflow::should_replan(report)
+            {
+                break;
+            }
+
+            let recovery_attempt = report.replan_attempts.saturating_add(1);
+            let failure_kind = workflow::recovery_failure_kind(report);
+            let completed_step_ids = report
+                .step_results
+                .iter()
+                .filter(|step| step.status == executor::ExecutionStepStatus::Completed)
+                .map(|step| step.id.clone())
+                .collect::<Vec<_>>();
+            let native_window_handle = context.native_window_handle;
+            let expected_process_id = context.process.id;
+            let observation = tauri::async_runtime::spawn_blocking(move || {
+                let fresh_context = context::capture_window_context(native_window_handle)?;
+                if fresh_context.process.id != expected_process_id {
+                    return Err(AppError::Execution(
+                        "the captured window now belongs to a different process.".to_string(),
+                    ));
+                }
+                let fresh_automation = uia::inspect_captured_window(&fresh_context)?;
+                Ok((fresh_context, fresh_automation))
+            })
+            .await;
+            let (fresh_context, fresh_automation) = match observation {
+                Ok(Ok(value)) => value,
+                Ok(Err(error)) => {
+                    workflow::mark_recovery_failure(
+                        aggregate.as_mut().expect("attempt report exists"),
+                        format!("Fresh observation failed: {error}"),
+                    );
+                    break;
+                }
+                Err(error) => {
+                    workflow::mark_recovery_failure(
+                        aggregate.as_mut().expect("attempt report exists"),
+                        format!("The recovery inspection worker stopped: {error}"),
+                    );
+                    break;
+                }
+            };
+
+            let provider = match ai::create_provider(provider_kind) {
+                Ok(provider) => provider,
+                Err(error) => {
+                    workflow::mark_recovery_failure(
+                        aggregate.as_mut().expect("attempt report exists"),
+                        error.to_string(),
+                    );
+                    break;
+                }
+            };
+            let recovery_plan = provider
+                .create_plan(ai::ProviderPlanningInput {
+                    request: original_request.clone(),
+                    context: fresh_context.clone(),
+                    automation: fresh_automation.clone(),
+                    recovery: Some(ai::RecoveryPlanningContext {
+                        attempt: recovery_attempt,
+                        maximum_attempts: workflow::MAX_REPLAN_ATTEMPTS,
+                        failure_kind,
+                        completed_step_ids,
+                    }),
+                })
+                .await;
+            let fresh_plan = match recovery_plan {
+                Ok(plan) => plan,
+                Err(error) => {
+                    workflow::mark_recovery_failure(
+                        aggregate.as_mut().expect("attempt report exists"),
+                        format!("Replanning failed: {error}"),
+                    );
+                    break;
+                }
+            };
+            state.set_recovery_snapshot(
+                fresh_context.clone(),
+                fresh_automation.clone(),
+                fresh_plan.clone(),
+            );
+            context = fresh_context;
+            automation = fresh_automation;
+            planning_result = fresh_plan;
+        }
+
+        let execution = aggregate.ok_or_else(|| {
+            AppError::Execution("execution ended without an attempt report.".to_string())
+        });
+
+        let restore_result = windows::restore_execution_surface(&app, &request.surface);
+        match execution {
+            Ok(report) => {
+                restore_result?;
+                Ok(report)
+            }
+            Err(error) => {
+                restore_result?;
+                Err(error)
+            }
+        }
+    }
+    .await;
+
+    state.finish_execution();
+    result
+}
+
+#[tauri::command]
+pub fn update_app_settings(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+    settings: AppSettings,
+) -> AppResult<RuntimeStatus> {
+    settings.validate()?;
+    let previous = state.settings();
+    let previous_status = state.status();
+
+    let registered_hotkey = hotkeys::replace_shortcut(
+        &app,
+        previous_status.registered_hotkey.as_deref(),
+        &settings.global_hotkey,
+    )?;
+
+    if settings.launch_at_startup != previous.launch_at_startup {
+        let autostart = app.autolaunch();
+        let result = if settings.launch_at_startup {
+            autostart.enable()
+        } else {
+            autostart.disable()
+        };
+
+        if let Err(error) = result {
+            if let Err(rollback_error) = hotkeys::restore_shortcut(
+                &app,
+                &registered_hotkey,
+                previous_status.registered_hotkey.as_deref(),
+            ) {
+                eprintln!("DESKFLOW_HOTKEY_ROLLBACK_FAILED code={rollback_error}");
+            }
+            return Err(AppError::Autostart(error.to_string()));
+        }
+    }
+
+    if let Err(error) = settings::persist(&app, &settings) {
+        if settings.launch_at_startup != previous.launch_at_startup {
+            let autostart = app.autolaunch();
+            if previous.launch_at_startup {
+                let _ = autostart.enable();
+            } else {
+                let _ = autostart.disable();
+            }
+        }
+        if let Err(rollback_error) = hotkeys::restore_shortcut(
+            &app,
+            &registered_hotkey,
+            previous_status.registered_hotkey.as_deref(),
+        ) {
+            eprintln!("DESKFLOW_HOTKEY_ROLLBACK_FAILED code={rollback_error}");
+        }
+        return Err(error);
+    }
+
+    state.replace_settings(settings);
+    state.set_hotkey_status(Some(registered_hotkey), None);
+    Ok(state.status())
+}
