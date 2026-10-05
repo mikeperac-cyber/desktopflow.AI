@@ -16,7 +16,7 @@ Acceptance criteria:
 - [x] startup remains off until explicitly saved
 - [x] automated frontend and Rust tests
 - [x] native release executable build
-- [ ] installer packaging and release metadata polish (Phase 12)
+- [x] x64 NSIS and MSI installer packaging with GitHub release metadata
 
 ## Phase 2 — Windows context (implemented)
 
@@ -128,7 +128,7 @@ Add granular approval policy, a global emergency stop, action/queue cancellation
 
 ## Phases 10–12 — Polish, measurement, release
 
-Complete accessibility and motion polish, measure actual latency and memory, create final product icons, produce installers, and publish release/privacy/troubleshooting documentation.
+Complete accessibility and motion polish, measure actual latency and memory, create final product icons, and continue release/privacy/troubleshooting documentation. The first downloadable x64 NSIS/MSI release is now available through GitHub Releases; Microsoft Store publication remains a separate Partner Center submission.
 
 ## MVP non-goals
 

@@ -44,6 +44,12 @@ The product is intentionally honest about its current boundary. It can execute o
 
 The validated local environment used Node 24 and Rust 1.99. See the current Tauri [Windows prerequisites](https://v2.tauri.app/start/prerequisites/) before setting up a new machine.
 
+## Download
+
+Download the latest Windows installers from the [GitHub Releases page](https://github.com/mikeperac-cyber/desktopflow.AI/releases/latest). The NSIS setup executable is the recommended per-user installation; the MSI is provided for managed Windows deployment. Both packages target Windows 10/11 x64 and require the WebView2 Runtime.
+
+These direct-download installers are currently unsigned development releases, so Windows SmartScreen may show a warning on first launch. A Microsoft Store release requires a Partner Center submission and Microsoft certification; it is not created by a GitHub upload alone.
+
 ## Develop
 
 ```powershell
