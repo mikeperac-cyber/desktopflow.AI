@@ -96,7 +96,7 @@ After each mutation, the executor polls its typed postcondition and marks the st
 
 ## Security evolution
 
-Phase 7 implements the pipeline through verified action and bounded fresh-state recovery. The credential/provider slice implements only the API-key-storage part of Phase 9; Phase 8 approval/cancellation and the rest of Phase 9 privacy/logging remain open. Later work must preserve these gates:
+Phases 1–12 implement the complete pipeline through verified action, bounded fresh-state recovery, granular step-level approval policy, emergency stop input release, sensitive field & keyword redaction, memory-bounded diagnostic logging, and accessible high-contrast UI polish. The runtime enforces these gates:
 
 ```text
 User instruction

@@ -29,8 +29,11 @@ export interface AppSettings {
 export interface RuntimeStatus {
   paused: boolean;
   executing: boolean;
+  emergency_stopped: boolean;
   registered_hotkey: string | null;
   hotkey_warning: string | null;
+  registered_emergency_hotkey?: string | null;
+  emergency_hotkey_warning?: string | null;
   active_target: ActiveTargetSummary | null;
   context_warning: string | null;
 }
@@ -213,8 +216,17 @@ export interface PlanningResult {
   plan: ActionPlan;
 }
 
-export type ExecutionStatus = "completed" | "failed" | "verification_failed";
-export type ExecutionStepStatus = "completed" | "failed" | "verification_failed";
+export type ExecutionStatus =
+  | "completed"
+  | "failed"
+  | "verification_failed"
+  | "cancelled"
+  | "emergency_stopped";
+export type ExecutionStepStatus =
+  | "completed"
+  | "failed"
+  | "verification_failed"
+  | "cancelled";
 
 export interface VerificationEvidence {
   kind: VerificationKind;
@@ -291,8 +303,19 @@ export const DEFAULT_SETTINGS: AppSettings = {
 export const DEFAULT_RUNTIME_STATUS: RuntimeStatus = {
   paused: false,
   executing: false,
+  emergency_stopped: false,
   registered_hotkey: "Alt+Space",
   hotkey_warning: null,
+  registered_emergency_hotkey: "Esc",
+  emergency_hotkey_warning: null,
   active_target: null,
   context_warning: null,
 };
+
+export interface DiagnosticLogEntry {
+  timestamp_unix_ms: number;
+  level: string;
+  category: string;
+  message: string;
+}
+

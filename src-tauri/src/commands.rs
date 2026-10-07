@@ -22,6 +22,10 @@ pub struct ExecutePlanRequest {
     provider_request_id: String,
     surface: String,
     confirmed: bool,
+    #[serde(default)]
+    approved_step_ids: Vec<String>,
+    #[serde(default)]
+    custom_max_steps: Option<u16>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -103,14 +107,24 @@ pub async fn capture_active_window(app: AppHandle) -> AppResult<WindowContextSna
     let restore_result = windows::show_settings(&app);
     match capture {
         Ok(snapshot) => {
-            app.state::<RuntimeState>()
-                .set_window_context(snapshot.clone());
+            let state = app.state::<RuntimeState>();
+            state.set_window_context(snapshot.clone());
+            state.log_diagnostic(
+                "info",
+                "context",
+                &format!("Captured active window: {}", snapshot.title),
+            );
             restore_result?;
             Ok(snapshot)
         }
         Err(error) => {
-            app.state::<RuntimeState>()
-                .set_context_warning(error.to_string());
+            let state = app.state::<RuntimeState>();
+            state.set_context_warning(error.to_string());
+            state.log_diagnostic(
+                "warn",
+                "context",
+                &format!("Target capture failed: {error}"),
+            );
             restore_result?;
             Err(error)
         }
@@ -137,6 +151,11 @@ pub async fn inspect_target_ui(
             })??;
 
     state.set_ui_automation(snapshot.clone());
+    state.log_diagnostic(
+        "info",
+        "uia",
+        &format!("Inspected target UI: {} elements", snapshot.elements.len()),
+    );
     Ok(snapshot)
 }
 
@@ -207,6 +226,15 @@ pub async fn create_action_plan(
         })
         .await?;
     state.set_action_plan(stored_request, result.clone());
+    state.log_diagnostic(
+        "info",
+        "ai",
+        &format!(
+            "Created action plan: {} ({} steps)",
+            result.plan.title,
+            result.plan.steps.len()
+        ),
+    );
     Ok(result)
 }
 
@@ -265,9 +293,19 @@ pub async fn execute_action_plan(
 
         highlight::hide(&app)?;
         windows::hide_known_window(&app, &request.surface)?;
-        let maximum_actions = usize::from(settings.maximum_autonomous_steps);
+        let maximum_actions = usize::from(
+            request
+                .custom_max_steps
+                .unwrap_or(settings.maximum_autonomous_steps),
+        );
+        let cancellation_token = state.cancellation_flag();
+        let approved_step_ids = request.approved_step_ids.clone();
+        let approval_policy = settings.approval_policy.clone();
         let mut aggregate: Option<ExecutionReport> = None;
         loop {
+            if state.is_cancelled() || state.is_emergency_stopped() {
+                break;
+            }
             let used_actions = aggregate
                 .as_ref()
                 .map_or(0, |report| report.step_results.len());
@@ -288,6 +326,9 @@ pub async fn execute_action_plan(
             let execution_context = context.clone();
             let execution_automation = automation.clone();
             let execution_plan = planning_result.plan.clone();
+            let execution_cancellation = std::sync::Arc::clone(&cancellation_token);
+            let execution_approved_ids = approved_step_ids.clone();
+            let execution_policy = approval_policy.clone();
             let execution = match tauri::async_runtime::spawn_blocking(move || {
                 thread::sleep(Duration::from_millis(180));
                 executor::execute_plan(
@@ -296,6 +337,9 @@ pub async fn execute_action_plan(
                     &execution_plan,
                     remaining_actions,
                     settings.execution_delay_ms,
+                    Some(&execution_cancellation),
+                    &execution_policy,
+                    &execution_approved_ids,
                 )
             })
             .await
@@ -321,6 +365,8 @@ pub async fn execute_action_plan(
             let report = aggregate.as_ref().expect("attempt report was just stored");
             if report.status == executor::ExecutionStatus::Completed
                 || !workflow::should_replan(report)
+                || state.is_cancelled()
+                || state.is_emergency_stopped()
             {
                 break;
             }
@@ -414,10 +460,16 @@ pub async fn execute_action_plan(
         let restore_result = windows::restore_execution_surface(&app, &request.surface);
         match execution {
             Ok(report) => {
+                state.log_diagnostic(
+                    "info",
+                    "executor",
+                    &format!("Execution completed with status {:?}", report.status),
+                );
                 restore_result?;
                 Ok(report)
             }
             Err(error) => {
+                state.log_diagnostic("error", "executor", &format!("Execution error: {error}"));
                 restore_result?;
                 Err(error)
             }
@@ -484,7 +536,63 @@ pub fn update_app_settings(
         return Err(error);
     }
 
+    let (registered_emergency, emergency_warning) =
+        if settings.emergency_hotkey != previous.emergency_hotkey {
+            match hotkeys::replace_emergency_shortcut(
+                &app,
+                previous_status.registered_emergency_hotkey.as_deref(),
+                &settings.emergency_hotkey,
+            ) {
+                Ok(hotkey) => (Some(hotkey), None),
+                Err(error) => (None, Some(error.to_string())),
+            }
+        } else {
+            (
+                previous_status.registered_emergency_hotkey,
+                previous_status.emergency_hotkey_warning,
+            )
+        };
+
     state.replace_settings(settings);
     state.set_hotkey_status(Some(registered_hotkey), None);
+    state.set_emergency_hotkey_status(registered_emergency, emergency_warning);
     Ok(state.status())
+}
+
+#[tauri::command]
+pub fn emergency_stop(app: AppHandle, state: State<'_, RuntimeState>) -> AppResult<bool> {
+    let was_executing = state.request_emergency_stop();
+    executor::release_stuck_inputs();
+    state.log_diagnostic("warn", "safety", "Emergency stop triggered");
+    if !was_executing {
+        let _ = windows::hide_known_window(&app, "overlay");
+    }
+    Ok(was_executing)
+}
+
+#[tauri::command]
+pub fn cancel_execution(state: State<'_, RuntimeState>) -> AppResult<bool> {
+    let was_executing = state.request_cancellation();
+    executor::release_stuck_inputs();
+    state.log_diagnostic("info", "safety", "Execution cancellation requested");
+    Ok(was_executing)
+}
+
+#[tauri::command]
+pub fn get_diagnostic_logs(
+    state: State<'_, RuntimeState>,
+) -> AppResult<Vec<crate::security::DiagnosticLogEntry>> {
+    Ok(state.diagnostic_logs())
+}
+
+#[tauri::command]
+pub fn clear_diagnostic_logs(state: State<'_, RuntimeState>) -> AppResult<bool> {
+    state.clear_diagnostic_logs();
+    Ok(true)
+}
+
+#[tauri::command]
+pub fn clear_local_cache(state: State<'_, RuntimeState>) -> AppResult<bool> {
+    state.clear_cache();
+    Ok(true)
 }

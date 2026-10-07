@@ -12,7 +12,8 @@
     "test:run": "vitest run",
     "check": "npm run lint && npm run typecheck && npm run test:run && cargo test --manifest-path src-tauri/Cargo.toml",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "build:exe": "tauri build"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

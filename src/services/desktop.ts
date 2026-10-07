@@ -6,6 +6,7 @@ import {
   type AppSettings,
   type AiProviderKind,
   type CommandError,
+  type DiagnosticLogEntry,
   type ExecutionReport,
   type RuntimeStatus,
   type PlanningModel,
@@ -262,6 +263,8 @@ export async function createActionPlan(
 export async function executeActionPlan(
   providerRequestId: string,
   surface: "overlay" | "settings",
+  approvedStepIds: string[] = [],
+  customMaxSteps?: number,
 ): Promise<ExecutionReport> {
   if (isTauri()) {
     return invoke<ExecutionReport>("execute_action_plan", {
@@ -269,6 +272,8 @@ export async function executeActionPlan(
         provider_request_id: providerRequestId,
         surface,
         confirmed: true,
+        approved_step_ids: approvedStepIds,
+        custom_max_steps: customMaxSteps,
       },
     });
   }
@@ -276,6 +281,20 @@ export async function executeActionPlan(
     code: "desktop_required",
     message: "Plan execution is available only in the DeskFlow desktop app.",
   } satisfies CommandError;
+}
+
+export async function cancelExecution(): Promise<boolean> {
+  if (isTauri()) {
+    return invoke<boolean>("cancel_execution");
+  }
+  return true;
+}
+
+export async function emergencyStop(): Promise<boolean> {
+  if (isTauri()) {
+    return invoke<boolean>("emergency_stop");
+  }
+  return true;
 }
 
 export async function setOverlayPlanMode(expanded: boolean): Promise<void> {
@@ -300,6 +319,27 @@ export async function hideWindow(label: HideableAppView): Promise<void> {
   if (isTauri()) {
     await invoke("hide_window", { label });
   }
+}
+
+export async function getDiagnosticLogs(): Promise<DiagnosticLogEntry[]> {
+  if (isTauri()) {
+    return invoke<DiagnosticLogEntry[]>("get_diagnostic_logs");
+  }
+  return [];
+}
+
+export async function clearDiagnosticLogs(): Promise<boolean> {
+  if (isTauri()) {
+    return invoke<boolean>("clear_diagnostic_logs");
+  }
+  return true;
+}
+
+export async function clearLocalCache(): Promise<boolean> {
+  if (isTauri()) {
+    return invoke<boolean>("clear_local_cache");
+  }
+  return true;
 }
 
 export function toUserMessage(error: unknown): string {

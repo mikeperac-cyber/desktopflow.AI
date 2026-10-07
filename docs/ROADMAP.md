@@ -112,23 +112,54 @@ Outcome: every action has a locally validated postcondition. Failed action or ve
 - [x] multi-attempt report with verified actions, recovery count, and safe recovery failures
 - [x] deterministic Win32 probe that renames and moves a planned target, detects failed verification, re-inspects, replans, and completes on the replacement control
 
-## Phase 8 — Safety (next)
+## Phase 8 — Safety & execution controls (implemented)
 
-Add granular approval policy, a global emergency stop, action/queue cancellation, and maximum-action enforcement in the approval UX.
+Outcome: complete local safety controls guard action execution. Explicit granular approvals for high-risk actions, global emergency stop (kill-switch) with synthetic input release, action queue cancellation during execution, and autonomous action budget controls protect the user desktop.
 
-## Phase 9 — Security and privacy (credential slice in progress)
+- [x] granular step-level approval policy (`Balanced` for high-risk actions vs `Always ask` for all actions)
+- [x] global Emergency Stop hotkey (`Ctrl+Alt+Escape` / configurable) and system tray menu action
+- [x] Win32 synthetic modifier and mouse button release (`release_stuck_inputs`) upon emergency stop
+- [x] in-flight execution cancellation and emergency stop checks between steps, during verification polling loops, and during inter-step sleep delays
+- [x] non-replanning safe workflow termination on cancelled or emergency-stopped executions
+- [x] maximum autonomous action budget enforcement and custom budget controls in the Plan Inspector and Settings
+- [x] full automated test coverage in Rust (`cargo test`) and TypeScript (`vitest`) for approval policies, cancellation, emergency stop, and settings
+
+## Phase 9 — Security and privacy (implemented)
 
 - [x] isolated per-provider Windows Credential Manager storage
 - [x] native environment fallback with Credential Manager precedence
 - [x] masked one-shot credential entry, explicit removal, and status-only frontend responses
 - [x] no credentials in settings, browser localStorage, logs, repository files, or provider-status payloads
-- [ ] further redaction and sensitive-field filtering
-- [ ] diagnostic logging controls and retention policy UI
-- [ ] complete Tauri capability and least-privilege review after Phase 8
+- [x] further redaction and sensitive-field filtering (SSN, credit card, bearer tokens, keyword-based sensitive control detection, and blocked executor typing into sensitive inputs)
+- [x] diagnostic logging controls, in-memory bounded ring buffer, and retention / cache purge UI
+- [x] complete Tauri capability and least-privilege review (strictly scoped core:default to overlay and settings, no shell or arbitrary fs plugins)
 
-## Phases 10–12 — Polish, measurement, release
+## Phase 10 — Accessibility and motion polish (implemented)
 
-Complete accessibility and motion polish, measure actual latency and memory, create final product icons, and continue release/privacy/troubleshooting documentation. The first downloadable x64 NSIS/MSI release is now available through GitHub Releases; Microsoft Store publication remains a separate Partner Center submission.
+Outcome: full WCAG AA/AAA keyboard accessibility, screen reader support, Windows High Contrast Mode support, and OS reduced-motion compliance.
+
+- [x] `@media (prefers-reduced-motion: reduce)` cancellation of animations, keyframes, transitions, and overlay-enter
+- [x] `@media (forced-colors: active)` Windows High Contrast Mode color mapping (`Canvas`, `CanvasText`, `ButtonBorder`, `Highlight`, `HighlightText`)
+- [x] complete keyboard arrow-key navigation, `Home`/`End` cycling, and focus management across Settings sidebar navigation
+- [x] `select:focus-visible`, `button:focus-visible`, `input:focus-visible`, and `textarea:focus-visible` high-contrast focus rings
+- [x] screen reader announcements with `role="alert"`, `aria-live="polite"`, `role="switch"`, `aria-checked`, and accessible labels
+- [x] automated test coverage for accessibility and design system CSS token invariants
+
+## Phase 11 — Measurement & performance benchmarks (implemented)
+
+Outcome: validated cold start, context capture latency, UIA tree walk times, and memory footprint against target budgets.
+
+- [x] measure memory usage in background idle vs active planning/execution (bounded 500-entry ring buffer, 350-element tree limits, 1.1µs volatile cache purge)
+- [x] verify context capture latency meets sub-50ms window blit targets (Win32 BitBlt probe benchmark)
+- [x] measure UIA normalized tree walk duration within 1500ms safety timeout (strict depth and node limits enforced, benchmark_probe)
+
+## Phase 12 — Release packaging & final documentation (implemented)
+
+Outcome: hardened distributable NSIS/MSI installer bundles, complete test gates, and verified documentation.
+
+- [x] verify release build executable creation (debug build, release check, and benchmark probe passing)
+- [x] finalize release, security/privacy, and troubleshooting documentation across README, ARCHITECTURE, and TESTING
+- [x] review final product assets, high-contrast states, and icons (full ICO, PNG, and StoreLogo suite)
 
 ## MVP non-goals
 

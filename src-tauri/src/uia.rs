@@ -332,23 +332,40 @@ mod platform {
         // SAFETY: UIA element getters are read-only COM calls on the worker's initialized apartment.
         unsafe {
             let localized = string_property(element.CurrentLocalizedControlType());
+            let role = role_for(
+                element
+                    .CurrentControlType()
+                    .unwrap_or(UIA_CONTROLTYPE_ID(0)),
+                localized,
+            );
+            let raw_name = string_property(element.CurrentName());
+            let automation_id = string_property(element.CurrentAutomationId());
+            let class_name = string_property(element.CurrentClassName());
+            let is_sensitive = bool_property(element.CurrentIsPassword(), false)
+                || crate::security::is_sensitive_control_indicator(
+                    &raw_name,
+                    &automation_id,
+                    &class_name,
+                    &role,
+                );
+            let name = if is_sensitive {
+                raw_name
+            } else {
+                crate::security::sanitize_sensitive_text(&raw_name)
+            };
+
             ElementCandidate {
-                name: string_property(element.CurrentName()),
-                role: role_for(
-                    element
-                        .CurrentControlType()
-                        .unwrap_or(UIA_CONTROLTYPE_ID(0)),
-                    localized,
-                ),
-                automation_id: string_property(element.CurrentAutomationId()),
-                class_name: string_property(element.CurrentClassName()),
+                name,
+                role,
+                automation_id,
+                class_name,
                 framework_id: string_property(element.CurrentFrameworkId()),
                 bounds_physical: bounds_property(element.CurrentBoundingRectangle()),
                 is_enabled: bool_property(element.CurrentIsEnabled(), true),
                 is_offscreen: bool_property(element.CurrentIsOffscreen(), false),
                 is_keyboard_focusable: bool_property(element.CurrentIsKeyboardFocusable(), false),
                 has_keyboard_focus: bool_property(element.CurrentHasKeyboardFocus(), false),
-                is_password: bool_property(element.CurrentIsPassword(), false),
+                is_password: is_sensitive,
             }
         }
     }

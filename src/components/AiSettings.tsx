@@ -4,6 +4,7 @@ import { PlanInspector } from "./PlanInspector";
 import {
   createActionPlan,
   deleteAiProviderCredential,
+  emergencyStop,
   executeActionPlan,
   loadAiProviderStatus,
   loadLastActionPlan,
@@ -122,16 +123,33 @@ export function AiSettings({
     }
   }
 
-  async function handleExecute() {
+  async function handleExecute(approvedStepIds: string[] = [], customMaxSteps?: number) {
     if (!plan) return;
     setExecuting(true);
     setExecutionError(null);
     try {
-      setExecution(await executeActionPlan(plan.provider_request_id, "settings"));
+      const report =
+        approvedStepIds.length > 0 || customMaxSteps !== undefined
+          ? await executeActionPlan(
+              plan.provider_request_id,
+              "settings",
+              approvedStepIds,
+              customMaxSteps,
+            )
+          : await executeActionPlan(plan.provider_request_id, "settings");
+      setExecution(report);
     } catch (executionFailure: unknown) {
       setExecutionError(toUserMessage(executionFailure));
     } finally {
       setExecuting(false);
+    }
+  }
+
+  async function handleEmergencyStop() {
+    try {
+      await emergencyStop();
+    } catch (stopError: unknown) {
+      setExecutionError(toUserMessage(stopError));
     }
   }
 
@@ -290,7 +308,8 @@ export function AiSettings({
           execution={execution}
           executionError={executionError}
           executing={executing}
-          onExecute={() => void handleExecute()}
+          onEmergencyStop={() => void handleEmergencyStop()}
+          onExecute={(approvedStepIds, customMaxSteps) => void handleExecute(approvedStepIds, customMaxSteps)}
           result={plan}
         />
       ) : null}

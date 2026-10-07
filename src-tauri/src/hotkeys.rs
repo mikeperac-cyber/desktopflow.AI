@@ -100,6 +100,61 @@ pub fn register_with_fallback(
     }
 }
 
+fn register_emergency(app: &AppHandle, shortcut: &str) -> AppResult<()> {
+    use tauri::Manager;
+    let normalized = normalize_shortcut(shortcut)?;
+    app.global_shortcut()
+        .on_shortcut(normalized.as_str(), |app, _shortcut, event| {
+            if event.state == ShortcutState::Pressed {
+                let state = app.state::<crate::runtime::RuntimeState>();
+                state.request_emergency_stop();
+                if !state.status().executing {
+                    let _ = windows::hide_known_window(app, "overlay");
+                }
+            }
+        })
+        .map_err(|error| AppError::Hotkey(error.to_string()))
+}
+
+pub fn register_emergency_with_fallback(
+    app: &AppHandle,
+    requested: &str,
+) -> (Option<String>, Option<String>) {
+    let requested = match normalize_shortcut(requested) {
+        Ok(value) => value,
+        Err(error) => return (None, Some(error.to_string())),
+    };
+
+    match register_emergency(app, &requested) {
+        Ok(()) => (Some(requested), None),
+        Err(error) => (None, Some(error.to_string())),
+    }
+}
+
+pub fn replace_emergency_shortcut(
+    app: &AppHandle,
+    current: Option<&str>,
+    requested: &str,
+) -> AppResult<String> {
+    let requested = normalize_shortcut(requested)?;
+    if current == Some(requested.as_str()) {
+        return Ok(requested);
+    }
+
+    if let Some(current) = current {
+        let _ = app.global_shortcut().unregister(current);
+    }
+
+    if let Err(error) = register_emergency(app, &requested) {
+        if let Some(current) = current {
+            let _ = register_emergency(app, current);
+        }
+        return Err(error);
+    }
+
+    Ok(requested)
+}
+
 pub fn replace_shortcut(
     app: &AppHandle,
     current: Option<&str>,

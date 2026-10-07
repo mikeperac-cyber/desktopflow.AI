@@ -6,8 +6,9 @@ mod error;
 pub mod executor;
 mod highlight;
 mod hotkeys;
-mod runtime;
-mod settings;
+pub mod runtime;
+pub mod security;
+pub mod settings;
 mod tray;
 pub mod uia;
 mod windows;
@@ -37,9 +38,15 @@ pub fn run() {
 
             let (registered, warning) =
                 hotkeys::register_with_fallback(app.handle(), &app_settings.global_hotkey);
+            let (registered_emergency, emergency_warning) =
+                hotkeys::register_emergency_with_fallback(
+                    app.handle(),
+                    &app_settings.emergency_hotkey,
+                );
             let state = app.state::<RuntimeState>();
             state.replace_settings(app_settings);
             state.set_hotkey_status(registered, warning);
+            state.set_emergency_hotkey_status(registered_emergency, emergency_warning);
 
             tray::install(app)?;
             highlight::initialize(app.handle())?;
@@ -74,6 +81,11 @@ pub fn run() {
             commands::execute_action_plan,
             commands::set_overlay_plan_mode,
             commands::update_app_settings,
+            commands::emergency_stop,
+            commands::cancel_execution,
+            commands::get_diagnostic_logs,
+            commands::clear_diagnostic_logs,
+            commands::clear_local_cache,
         ])
         .run(tauri::generate_context!());
 

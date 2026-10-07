@@ -15,12 +15,18 @@ pub fn install(app: &tauri::App) -> AppResult<()> {
     let pause =
         CheckMenuItem::with_id(app, "pause", "Pause automation", true, paused, None::<&str>)
             .map_err(|error| crate::error::AppError::Window(error.to_string()))?;
+    let emergency_stop =
+        MenuItem::with_id(app, "emergency_stop", "Emergency stop", true, None::<&str>)
+            .map_err(|error| crate::error::AppError::Window(error.to_string()))?;
     let separator = PredefinedMenuItem::separator(app)
         .map_err(|error| crate::error::AppError::Window(error.to_string()))?;
     let quit = MenuItem::with_id(app, "quit", "Quit DeskFlow", true, None::<&str>)
         .map_err(|error| crate::error::AppError::Window(error.to_string()))?;
-    let menu = Menu::with_items(app, &[&open, &settings, &pause, &separator, &quit])
-        .map_err(|error| crate::error::AppError::Window(error.to_string()))?;
+    let menu = Menu::with_items(
+        app,
+        &[&open, &settings, &pause, &emergency_stop, &separator, &quit],
+    )
+    .map_err(|error| crate::error::AppError::Window(error.to_string()))?;
 
     let pause_for_menu = pause.clone();
     let mut builder = TrayIconBuilder::with_id("deskflow-tray")
@@ -43,6 +49,10 @@ pub fn install(app: &tauri::App) -> AppResult<()> {
                 if let Err(error) = pause_for_menu.set_checked(paused) {
                     eprintln!("DESKFLOW_TRAY_PAUSE_STATE_FAILED code={error}");
                 }
+            }
+            "emergency_stop" => {
+                let state = app.state::<RuntimeState>();
+                state.request_emergency_stop();
             }
             "quit" => app.exit(0),
             _ => {}

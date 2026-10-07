@@ -4,7 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   captureActiveWindow,
+  clearDiagnosticLogs,
+  clearLocalCache,
   clearTargetHighlight,
+  getDiagnosticLogs,
   hideWindow,
   highlightUiElement,
   inspectTargetUi,
@@ -27,7 +30,16 @@ import { SettingsPanel } from "./SettingsPanel";
 
 vi.mock("../services/desktop", () => ({
   captureActiveWindow: vi.fn(),
+  clearDiagnosticLogs: vi.fn().mockResolvedValue(true),
+  clearLocalCache: vi.fn().mockResolvedValue(true),
   clearTargetHighlight: vi.fn().mockResolvedValue(undefined),
+  deleteAiProviderCredential: vi.fn().mockResolvedValue({
+    selected: "gemini",
+    providers: [],
+  }),
+  getDiagnosticLogs: vi.fn().mockResolvedValue([
+    { timestamp_unix_ms: 1000, level: "info", category: "test", message: "System initialized" },
+  ]),
   hideWindow: vi.fn().mockResolvedValue(undefined),
   highlightUiElement: vi.fn(),
   inspectTargetUi: vi.fn(),
@@ -38,7 +50,6 @@ vi.mock("../services/desktop", () => ({
   loadRuntimeStatus: vi.fn(),
   loadSettings: vi.fn(),
   saveAiProviderCredential: vi.fn(),
-  deleteAiProviderCredential: vi.fn(),
   saveSettings: vi.fn(),
   toUserMessage: (error: unknown) => String(error),
 }));
@@ -316,5 +327,97 @@ describe("SettingsPanel", () => {
     await user.click(screen.getByRole("button", { name: "Clear highlight for Text editor" }));
     expect(clearTargetHighlight).toHaveBeenCalledOnce();
     expect(await screen.findByRole("button", { name: "Highlight Text editor" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("edits and saves automation safety settings", async () => {
+    const user = userEvent.setup();
+    render(<SettingsPanel />);
+
+    await user.click(await screen.findByRole("button", { name: "Automation" }));
+    expect(await screen.findByRole("heading", { name: "Approval policy" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Execution safety & limits" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("radio", { name: /Always ask/ }));
+    const maxSteps = screen.getByLabelText("Maximum autonomous actions");
+    await user.clear(maxSteps);
+    await user.type(maxSteps, "24");
+
+    await user.click(screen.getByRole("button", { name: "Save settings" }));
+
+    await waitFor(() => {
+      expect(saveSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          approval_policy: "always_ask",
+          maximum_autonomous_steps: 24,
+        }),
+      );
+    });
+  });
+
+  it("manages privacy settings, cache clearing, and diagnostic logs", async () => {
+    const user = userEvent.setup();
+    render(<SettingsPanel />);
+
+    await user.click(await screen.findByRole("button", { name: "Privacy" }));
+    expect(await screen.findByRole("heading", { name: "Credential & context security" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Diagnostic logging" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Clear context cache" }));
+    expect(clearLocalCache).toHaveBeenCalledOnce();
+    expect(await screen.findByText("In-memory window context and UI trees cleared.")).toBeInTheDocument();
+
+    // Toggle diagnostic logging ON
+    const loggingToggle = screen.getByRole("switch", { name: "Enable local diagnostic logging" });
+    await user.click(loggingToggle);
+
+    // Now log section is visible
+    const viewLogsBtn = await screen.findByRole("button", { name: /View logs/ });
+    await user.click(viewLogsBtn);
+    expect(getDiagnosticLogs).toHaveBeenCalledOnce();
+    expect(await screen.findByText("System initialized")).toBeInTheDocument();
+
+    const clearLogsBtn = screen.getByRole("button", { name: "Clear logs" });
+    await user.click(clearLogsBtn);
+    expect(clearDiagnosticLogs).toHaveBeenCalledOnce();
+    expect(await screen.findByText("Diagnostic logs cleared.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Save settings" }));
+    await waitFor(() => {
+      expect(saveSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          diagnostic_logging: true,
+        }),
+      );
+    });
+  });
+
+  it("navigates through settings sections using arrow keys and home/end", async () => {
+    const user = userEvent.setup();
+    render(<SettingsPanel />);
+
+    const generalBtn = await screen.findByRole("button", { name: "General" });
+    expect(generalBtn).toHaveAttribute("aria-current", "page");
+
+    generalBtn.focus();
+    expect(generalBtn).toHaveFocus();
+
+    await user.keyboard("{ArrowDown}");
+    const aiBtn = screen.getByRole("button", { name: "AI" });
+    expect(aiBtn).toHaveAttribute("aria-current", "page");
+    expect(aiBtn).toHaveFocus();
+
+    await user.keyboard("{ArrowDown}");
+    const autoBtn = screen.getByRole("button", { name: "Automation" });
+    expect(autoBtn).toHaveAttribute("aria-current", "page");
+    expect(autoBtn).toHaveFocus();
+
+    await user.keyboard("{End}");
+    const advancedBtn = screen.getByRole("button", { name: "Advanced" });
+    expect(advancedBtn).toHaveAttribute("aria-current", "page");
+    expect(advancedBtn).toHaveFocus();
+
+    await user.keyboard("{Home}");
+    expect(screen.getByRole("button", { name: "General" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: "General" })).toHaveFocus();
   });
 });

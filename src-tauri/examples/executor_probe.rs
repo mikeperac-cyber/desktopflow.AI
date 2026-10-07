@@ -100,7 +100,16 @@ mod windows_probe {
         unsafe { MoveWindow(live_button, 124, 96, 190, 34, true) }?;
         thread::sleep(Duration::from_millis(100));
 
-        let first_report = executor::execute_plan(&context, &snapshot, &plan, 12, 100)?;
+        let first_report = executor::execute_plan(
+            &context,
+            &snapshot,
+            &plan,
+            12,
+            100,
+            None,
+            &deskflow_ai_lib::settings::ApprovalPolicy::Balanced,
+            &[],
+        )?;
         if first_report.status != ExecutionStatus::VerificationFailed
             || first_report
                 .step_results
@@ -143,8 +152,16 @@ mod windows_probe {
                 None,
             )],
         };
-        let recovery_report =
-            executor::execute_plan(&fresh_context, &fresh_snapshot, &recovery_plan, 10, 100)?;
+        let recovery_report = executor::execute_plan(
+            &fresh_context,
+            &fresh_snapshot,
+            &recovery_plan,
+            10,
+            100,
+            None,
+            &deskflow_ai_lib::settings::ApprovalPolicy::Balanced,
+            &[],
+        )?;
         let report = workflow::merge_attempt(Some(first_report), recovery_report);
         if report.status != ExecutionStatus::Completed || !report.recovered {
             return Err(format!("bounded recovery failed: {:?}", report.failure_message).into());

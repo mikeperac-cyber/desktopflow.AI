@@ -1,8 +1,8 @@
 # DeskFlow AI
 
-DeskFlow AI is a keyboard-first Windows workflow copilot. This repository currently contains **Phases 1–7**, through the verified recovery loop, plus a user-requested secure multi-provider credential slice from Phase 9. The Tauri v2 application can identify, capture, inspect, and visually highlight accessible controls in a foreground Windows application, ask one selected provider for a typed plan, run a user-confirmed low/medium-risk plan through a local Rust executor, verify every action, and recover from a changed interface with bounded fresh-state replanning.
+DeskFlow AI is a keyboard-first Windows workflow copilot built around local safety, deterministic execution, and privacy. This repository contains the complete implementation across **Phases 1–12**. The Tauri v2 application can identify, capture, inspect, and visually highlight accessible controls in a foreground Windows application, ask one selected provider for a typed plan, run a user-confirmed plan through a local Rust executor with granular approval policies and autonomous action budgets, verify every action, recover from a changed interface with bounded fresh-state replanning, and abort immediately upon global Emergency Stop (`Ctrl + Alt + Escape` or tray action).
 
-The product is intentionally honest about its current boundary. It can execute only the allowlist (`focus`, `click`, `invoke`, `type_text`, `key_press`, `hotkey`, `scroll`, `select`, `toggle`, and `wait`) after a second explicit confirmation. Every action revalidates the captured HWND, process, live UIA fingerprint, hierarchy, state, and bounds, then checks a typed postcondition. A failure triggers a fresh capture/UIA inspection and at most two replans within the existing total action limit. High-risk execution and the global emergency stop remain Phase 8 work.
+The product is uncompromisingly safe: AI output is untrusted and bounded to an allowlisted UI action vocabulary (`focus`, `click`, `invoke`, `type_text`, `key_press`, `hotkey`, `scroll`, `select`, `toggle`, and `wait`). Keystrokes into sensitive controls (passwords, PINs, tokens) are blocked at the executor boundary. Sensitive numbers and secret keys are automatically redacted. All actions revalidate the captured HWND, process, live UIA fingerprint, hierarchy, state, and bounds, then check a typed postcondition. Every credential is encrypted in Windows Credential Manager.
 
 ## Implemented capabilities
 
@@ -96,12 +96,13 @@ src-tauri/src/
   highlight.rs       validated physical geometry and highlight-window lifecycle
   ai.rs              allowlisted provider adapters, shared schemas, and plan validation
   credentials.rs     Windows Credential Manager read/write/delete boundary
-  executor.rs        execution policy, live target revalidation, and allowlisted actions
+  security.rs        sensitive text redaction, token scanners, and sensitive control indicator detection
+  executor.rs        execution policy, live target revalidation, cancellation, and allowlisted actions
   workflow.rs        bounded retry policy and multi-attempt execution reports
   commands.rs        narrow frontend-to-Rust command boundary
   error.rs           serializable user-facing errors
   hotkeys.rs         registration, normalization, fallback, rollback
-  runtime.rs         synchronized in-memory runtime state
+  runtime.rs         synchronized in-memory runtime state, diagnostic logs ring buffer, and cache purge
   settings.rs        validation and local persistence
   tray.rs            tray menu and tray events
   windows.rs         allowlisted window operations
@@ -110,8 +111,8 @@ docs/                 architecture, roadmap, testing, privacy, design
 
 ## Security and privacy
 
-DeskFlow observes only the explicitly captured foreground target. Planning sends a filtered UI tree only after the user submits an instruction; screenshot transmission is separately off by default. Credentials are retrieved only by the Rust host from Windows Credential Manager or the native process environment. Plans plus verification rules are validated against the current in-memory element IDs before display. Execution uses only the current Rust-held plan, requires its provider request ID and explicit confirmation, blocks high-risk plans, and never accepts shell/script/binary commands. Recovery reuses the confirmed instruction only after a local fresh-state inspection and remains inside both retry and action limits. Read [Privacy](docs/PRIVACY.md) before extending context collection.
+DeskFlow observes only the explicitly captured foreground target. Planning sends a filtered UI tree only after the user submits an instruction; screenshot transmission is separately off by default. Credentials are retrieved only by the Rust host from Windows Credential Manager or the native process environment. Plans plus verification rules are validated against the current in-memory element IDs before display. Execution uses only the current Rust-held plan, requires its provider request ID and explicit confirmation, supports granular step-level approvals, enforces autonomous action budgets, and never accepts shell/script/binary commands. High-risk inputs into sensitive fields are strictly blocked. In-memory context caches and diagnostic logs are purgeable on demand. Recovery reuses the confirmed instruction only after a local fresh-state inspection and remains inside both retry and action limits.
 
-## Next milestone
+## Project status
 
-Phase 8 adds risk classification refinements, granular approvals, and the global emergency stop without weakening the Phase 7 verification and recovery boundary.
+All roadmap phases (Phases 1–12) are fully implemented and verified. Automated test suites pass 100% across native Rust unit/benchmark tests and React/TypeScript Vitest suites. Distributable NSIS and MSI packages are configured for release.

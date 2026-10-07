@@ -668,11 +668,23 @@ fn build_request_body(input: &ProviderPlanningInput) -> AppResult<(Value, usize)
 }
 
 fn provider_element(element: &NormalizedUiElement) -> Value {
+    let is_sensitive = element.is_password
+        || crate::security::is_sensitive_control_indicator(
+            &element.name,
+            &element.automation_id,
+            &element.class_name,
+            &element.role,
+        );
+    let sanitized_name = if is_sensitive {
+        "[protected]".to_string()
+    } else {
+        crate::security::sanitize_sensitive_text(&element.name)
+    };
     json!({
         "id": element.id,
         "parent_id": element.parent_id,
         "depth": element.depth,
-        "name": if element.is_password { "[protected]" } else { element.name.as_str() },
+        "name": sanitized_name,
         "role": element.role,
         "automation_id": element.automation_id,
         "class_name": element.class_name,
@@ -680,7 +692,7 @@ fn provider_element(element: &NormalizedUiElement) -> Value {
         "is_enabled": element.is_enabled,
         "is_keyboard_focusable": element.is_keyboard_focusable,
         "has_keyboard_focus": element.has_keyboard_focus,
-        "is_password": element.is_password,
+        "is_password": is_sensitive,
         "supported_patterns": element.supported_patterns
     })
 }
@@ -1611,7 +1623,14 @@ fn validate_step_shape(
         }
         ActionKind::TypeText | ActionKind::Select => {
             let target = require_target()?;
-            if target.is_password {
+            let is_sensitive = target.is_password
+                || crate::security::is_sensitive_control_indicator(
+                    &target.name,
+                    &target.automation_id,
+                    &target.class_name,
+                    &target.role,
+                );
+            if is_sensitive {
                 return Err(AppError::InvalidPlan(format!(
                     "Step '{}' attempts to enter or select sensitive content in a password control.",
                     step.id

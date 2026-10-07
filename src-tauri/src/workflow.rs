@@ -6,7 +6,10 @@ use crate::{
 pub const MAX_REPLAN_ATTEMPTS: u8 = 2;
 
 pub fn should_replan(report: &ExecutionReport) -> bool {
-    report.status != ExecutionStatus::Completed && report.replan_attempts < MAX_REPLAN_ATTEMPTS
+    report.status != ExecutionStatus::Completed
+        && report.status != ExecutionStatus::Cancelled
+        && report.status != ExecutionStatus::EmergencyStopped
+        && report.replan_attempts < MAX_REPLAN_ATTEMPTS
 }
 
 pub fn recovery_failure_kind(report: &ExecutionReport) -> RecoveryFailureKind {
@@ -99,5 +102,11 @@ mod tests {
         let aggregate = aggregate.expect("aggregate report");
         assert_eq!(aggregate.replan_attempts, MAX_REPLAN_ATTEMPTS);
         assert!(!should_replan(&aggregate));
+    }
+
+    #[test]
+    fn cancelled_and_stopped_reports_do_not_replan() {
+        assert!(!should_replan(&report(ExecutionStatus::Cancelled)));
+        assert!(!should_replan(&report(ExecutionStatus::EmergencyStopped)));
     }
 }

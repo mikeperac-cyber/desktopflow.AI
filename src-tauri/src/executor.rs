@@ -22,6 +22,8 @@ pub enum ExecutionStatus {
     Completed,
     Failed,
     VerificationFailed,
+    Cancelled,
+    EmergencyStopped,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -30,6 +32,7 @@ pub enum ExecutionStepStatus {
     Completed,
     Failed,
     VerificationFailed,
+    Cancelled,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -68,9 +71,78 @@ pub struct ExecutionReport {
     pub recovery_failure_message: Option<String>,
 }
 
+pub fn release_stuck_inputs() {
+    #[cfg(windows)]
+    {
+        use windows::Win32::UI::Input::KeyboardAndMouse::{
+            INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT, KEYEVENTF_KEYUP,
+            MOUSEEVENTF_LEFTUP, MOUSEINPUT, SendInput, VK_CONTROL, VK_LWIN, VK_MENU, VK_SHIFT,
+        };
+        let inputs = [
+            INPUT {
+                r#type: INPUT_KEYBOARD,
+                Anonymous: INPUT_0 {
+                    ki: KEYBDINPUT {
+                        wVk: VK_CONTROL,
+                        dwFlags: KEYEVENTF_KEYUP,
+                        ..Default::default()
+                    },
+                },
+            },
+            INPUT {
+                r#type: INPUT_KEYBOARD,
+                Anonymous: INPUT_0 {
+                    ki: KEYBDINPUT {
+                        wVk: VK_SHIFT,
+                        dwFlags: KEYEVENTF_KEYUP,
+                        ..Default::default()
+                    },
+                },
+            },
+            INPUT {
+                r#type: INPUT_KEYBOARD,
+                Anonymous: INPUT_0 {
+                    ki: KEYBDINPUT {
+                        wVk: VK_MENU,
+                        dwFlags: KEYEVENTF_KEYUP,
+                        ..Default::default()
+                    },
+                },
+            },
+            INPUT {
+                r#type: INPUT_KEYBOARD,
+                Anonymous: INPUT_0 {
+                    ki: KEYBDINPUT {
+                        wVk: VK_LWIN,
+                        dwFlags: KEYEVENTF_KEYUP,
+                        ..Default::default()
+                    },
+                },
+            },
+            INPUT {
+                r#type: INPUT_MOUSE,
+                Anonymous: INPUT_0 {
+                    mi: MOUSEINPUT {
+                        dwFlags: MOUSEEVENTF_LEFTUP,
+                        ..Default::default()
+                    },
+                },
+            },
+        ];
+        // SAFETY: inputs is a valid contiguous slice and cbSize matches INPUT exactly.
+        unsafe {
+            let _ = SendInput(&inputs, std::mem::size_of::<INPUT>() as i32);
+        }
+    }
+}
+
 trait ActionDriver {
     fn perform(&mut self, step: &PlannedAction) -> Result<String, String>;
-    fn verify(&mut self, verification: &VerificationSpec) -> Result<VerificationEvidence, String>;
+    fn verify(
+        &mut self,
+        verification: &VerificationSpec,
+        cancellation: Option<&std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    ) -> Result<VerificationEvidence, String>;
 }
 
 fn timestamp_ms() -> u64 {
@@ -87,6 +159,8 @@ fn validate_execution_policy(
     snapshot: &UiAutomationSnapshot,
     plan: &ActionPlan,
     maximum_steps: usize,
+    approval_policy: &crate::settings::ApprovalPolicy,
+    approved_step_ids: &[String],
 ) -> AppResult<()> {
     ai::validate_action_plan(plan, snapshot)?;
     if plan.status != PlanStatus::Ready {
@@ -100,13 +174,16 @@ fn validate_execution_policy(
             plan.steps.len()
         )));
     }
-    if plan.overall_risk == RiskLevel::High
-        || plan.steps.iter().any(|step| step.risk == RiskLevel::High)
-    {
-        return Err(AppError::ExecutionPolicy(
-            "high-risk actions remain disabled until the Phase 8 approval controls are available."
-                .to_string(),
-        ));
+    for step in &plan.steps {
+        let requires_approval = step.risk == RiskLevel::High
+            || step.requires_user_approval
+            || *approval_policy == crate::settings::ApprovalPolicy::AlwaysAsk;
+        if requires_approval && !approved_step_ids.iter().any(|id| id == &step.id) {
+            return Err(AppError::ExecutionPolicy(format!(
+                "step '{}' requires explicit user approval before execution.",
+                step.id
+            )));
+        }
     }
     if context.process.id != snapshot.target.process_id {
         return Err(AppError::ExecutionPolicy(
@@ -129,20 +206,35 @@ fn validate_execution_policy(
     Ok(())
 }
 
+/// Reports whether the shared emergency-stop / cancellation flag has been set.
+fn is_cancelled(cancellation: Option<&std::sync::Arc<std::sync::atomic::AtomicBool>>) -> bool {
+    cancellation.is_some_and(|token| token.load(std::sync::atomic::Ordering::SeqCst))
+}
+
 fn run_steps(
     driver: &mut impl ActionDriver,
     plan: &ActionPlan,
     delay: Duration,
+    cancellation: Option<&std::sync::Arc<std::sync::atomic::AtomicBool>>,
 ) -> ExecutionReport {
     let started_at_unix_ms = timestamp_ms();
     let mut results = Vec::with_capacity(plan.steps.len());
     let mut completed_steps = 0;
     let mut failure_message = None;
+    let mut was_cancelled = false;
 
     for (index, step) in plan.steps.iter().enumerate() {
+        if is_cancelled(cancellation) {
+            release_stuck_inputs();
+            was_cancelled = true;
+            failure_message =
+                Some("Execution stopped by emergency stop / cancellation.".to_string());
+            break;
+        }
+
         let started = Instant::now();
         match driver.perform(step) {
-            Ok(method) => match driver.verify(&step.verification) {
+            Ok(method) => match driver.verify(&step.verification, cancellation) {
                 Ok(verification) => {
                     completed_steps += 1;
                     results.push(ExecutionStepResult {
@@ -157,10 +249,50 @@ fn run_steps(
                         error: None,
                     });
                     if index + 1 < plan.steps.len() {
-                        thread::sleep(delay);
+                        let step_delay_start = Instant::now();
+                        while step_delay_start.elapsed() < delay {
+                            if is_cancelled(cancellation) {
+                                release_stuck_inputs();
+                                was_cancelled = true;
+                                failure_message = Some(
+                                    "Execution stopped by emergency stop / cancellation."
+                                        .to_string(),
+                                );
+                                break;
+                            }
+                            thread::sleep(
+                                Duration::from_millis(20)
+                                    .min(delay.saturating_sub(step_delay_start.elapsed())),
+                            );
+                        }
+                        if was_cancelled {
+                            break;
+                        }
                     }
                 }
                 Err(error) => {
+                    if is_cancelled(cancellation) {
+                        release_stuck_inputs();
+                        was_cancelled = true;
+                        failure_message =
+                            Some("Execution stopped by emergency stop / cancellation.".to_string());
+                        results.push(ExecutionStepResult {
+                            plan_attempt: 1,
+                            id: step.id.clone(),
+                            kind: step.kind,
+                            target_id: step.target_id.clone(),
+                            status: ExecutionStepStatus::Cancelled,
+                            method: Some(method),
+                            duration_ms: started
+                                .elapsed()
+                                .as_millis()
+                                .try_into()
+                                .unwrap_or(u64::MAX),
+                            verification: None,
+                            error: Some(error),
+                        });
+                        break;
+                    }
                     failure_message = Some(format!(
                         "Step '{}' changed the UI, but verification failed: {error}",
                         step.id
@@ -180,6 +312,24 @@ fn run_steps(
                 }
             },
             Err(error) => {
+                if is_cancelled(cancellation) {
+                    release_stuck_inputs();
+                    was_cancelled = true;
+                    failure_message =
+                        Some("Execution stopped by emergency stop / cancellation.".to_string());
+                    results.push(ExecutionStepResult {
+                        plan_attempt: 1,
+                        id: step.id.clone(),
+                        kind: step.kind,
+                        target_id: step.target_id.clone(),
+                        status: ExecutionStepStatus::Cancelled,
+                        method: None,
+                        duration_ms: started.elapsed().as_millis().try_into().unwrap_or(u64::MAX),
+                        verification: None,
+                        error: Some(error),
+                    });
+                    break;
+                }
                 failure_message = Some(format!("Step '{}' stopped: {error}", step.id));
                 results.push(ExecutionStepResult {
                     plan_attempt: 1,
@@ -197,19 +347,23 @@ fn run_steps(
         }
     }
 
+    let status = if was_cancelled {
+        ExecutionStatus::Cancelled
+    } else if results
+        .last()
+        .is_some_and(|result| result.status == ExecutionStepStatus::VerificationFailed)
+    {
+        ExecutionStatus::VerificationFailed
+    } else if failure_message.is_some() {
+        ExecutionStatus::Failed
+    } else {
+        ExecutionStatus::Completed
+    };
+
     ExecutionReport {
         started_at_unix_ms,
         finished_at_unix_ms: timestamp_ms(),
-        status: if results
-            .last()
-            .is_some_and(|result| result.status == ExecutionStepStatus::VerificationFailed)
-        {
-            ExecutionStatus::VerificationFailed
-        } else if failure_message.is_some() {
-            ExecutionStatus::Failed
-        } else {
-            ExecutionStatus::Completed
-        },
+        status,
         total_steps: plan.steps.len(),
         completed_steps,
         plan_attempts: 1,
@@ -221,14 +375,28 @@ fn run_steps(
     }
 }
 
+// Eight explicit arguments are kept so every Tauri command, workflow recovery
+// step, and developer probe passes policy inputs positionally without hiding
+// them inside an opaque struct at the IPC boundary.
+#[allow(clippy::too_many_arguments)]
 pub fn execute_plan(
     context: &WindowContextSnapshot,
     snapshot: &UiAutomationSnapshot,
     plan: &ActionPlan,
     maximum_steps: usize,
     execution_delay_ms: u32,
+    cancellation: Option<&std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    approval_policy: &crate::settings::ApprovalPolicy,
+    approved_step_ids: &[String],
 ) -> AppResult<ExecutionReport> {
-    validate_execution_policy(context, snapshot, plan, maximum_steps)?;
+    validate_execution_policy(
+        context,
+        snapshot,
+        plan,
+        maximum_steps,
+        approval_policy,
+        approved_step_ids,
+    )?;
 
     #[cfg(windows)]
     {
@@ -238,12 +406,22 @@ pub fn execute_plan(
             &mut driver,
             plan,
             Duration::from_millis(u64::from(execution_delay_ms)),
+            cancellation,
         ))
     }
 
     #[cfg(not(windows))]
     {
-        let _ = (context, snapshot, plan, execution_delay_ms);
+        let _ = (
+            context,
+            snapshot,
+            plan,
+            maximum_steps,
+            execution_delay_ms,
+            cancellation,
+            approval_policy,
+            approved_step_ids,
+        );
         Err(AppError::Execution(
             "the action executor is available only on Windows.".to_string(),
         ))
@@ -316,7 +494,7 @@ mod platform {
         uia::{NormalizedUiElement, UiAutomationSnapshot},
     };
 
-    use super::{ActionDriver, VerificationEvidence};
+    use super::{ActionDriver, VerificationEvidence, is_cancelled};
 
     const MAX_REVALIDATION_VISITS: usize = 1_500;
     const MAX_REVALIDATION_DURATION: Duration = Duration::from_millis(1_500);
@@ -584,7 +762,14 @@ mod platform {
         }
 
         fn type_text(&self, target: &ResolvedElement, text: &str) -> Result<String, String> {
-            if target.candidate.is_password {
+            if target.candidate.is_password
+                || crate::security::is_sensitive_control_indicator(
+                    &target.candidate.name,
+                    &target.candidate.automation_id,
+                    &target.candidate.class_name,
+                    &target.candidate.role,
+                )
+            {
                 return Err("text entry into password controls is blocked.".to_string());
             }
             // SAFETY: the live element was resolved in this COM apartment.
@@ -701,7 +886,14 @@ mod platform {
         }
 
         fn select(&self, target: &ResolvedElement, text: &str) -> Result<String, String> {
-            if target.candidate.is_password {
+            if target.candidate.is_password
+                || crate::security::is_sensitive_control_indicator(
+                    &target.candidate.name,
+                    &target.candidate.automation_id,
+                    &target.candidate.class_name,
+                    &target.candidate.role,
+                )
+            {
                 return Err("selection in password controls is blocked.".to_string());
             }
 
@@ -1037,12 +1229,16 @@ mod platform {
         fn verify(
             &mut self,
             verification: &VerificationSpec,
+            cancellation: Option<&std::sync::Arc<std::sync::atomic::AtomicBool>>,
         ) -> Result<VerificationEvidence, String> {
             let started = Instant::now();
             let timeout = Duration::from_millis(verification.timeout_ms);
             let mut attempts = 0_u32;
             let mut last_error = None;
             loop {
+                if is_cancelled(cancellation) {
+                    return Err("verification interrupted by cancellation".to_string());
+                }
                 attempts = attempts.saturating_add(1);
                 match self.check_verification(verification) {
                     Ok(Some(method)) => {
@@ -1063,7 +1259,12 @@ mod platform {
                 if started.elapsed() >= timeout {
                     break;
                 }
-                thread::sleep(Duration::from_millis(40));
+                for _ in 0..4 {
+                    if is_cancelled(cancellation) {
+                        return Err("verification interrupted by cancellation".to_string());
+                    }
+                    thread::sleep(Duration::from_millis(10));
+                }
             }
             Err(last_error.unwrap_or_else(|| {
                 format!(
@@ -1475,6 +1676,7 @@ mod tests {
         fn verify(
             &mut self,
             verification: &VerificationSpec,
+            _cancellation: Option<&std::sync::Arc<std::sync::atomic::AtomicBool>>,
         ) -> Result<VerificationEvidence, String> {
             if self.fail_verification {
                 Err("simulated changed state".to_string())
@@ -1624,7 +1826,7 @@ mod tests {
             fail_verification: false,
             calls: Vec::new(),
         };
-        let report = run_steps(&mut driver, &plan, Duration::ZERO);
+        let report = run_steps(&mut driver, &plan, Duration::ZERO, None);
         assert_eq!(report.status, ExecutionStatus::Failed);
         assert_eq!(report.completed_steps, 1);
         assert_eq!(driver.calls, vec!["one", "two"]);
@@ -1642,7 +1844,7 @@ mod tests {
             fail_verification: true,
             calls: Vec::new(),
         };
-        let report = run_steps(&mut driver, &plan, Duration::ZERO);
+        let report = run_steps(&mut driver, &plan, Duration::ZERO, None);
         assert_eq!(report.status, ExecutionStatus::VerificationFailed);
         assert_eq!(report.completed_steps, 0);
         assert_eq!(driver.calls, vec!["changed"]);
@@ -1653,11 +1855,77 @@ mod tests {
     }
 
     #[test]
-    fn blocks_high_risk_plans_before_a_driver_can_run() {
+    fn blocks_high_risk_plans_without_approval() {
         let plan = plan(vec![wait_step("danger", RiskLevel::High)]);
-        let error = validate_execution_policy(&context(), &snapshot(), &plan, 12)
-            .expect_err("high risk must remain blocked");
+        let error = validate_execution_policy(
+            &context(),
+            &snapshot(),
+            &plan,
+            12,
+            &crate::settings::ApprovalPolicy::Balanced,
+            &[],
+        )
+        .expect_err("high risk must remain blocked without approval");
         assert!(matches!(error, AppError::ExecutionPolicy(_)));
+    }
+
+    #[test]
+    fn allows_high_risk_plans_with_granular_approval() {
+        let plan = plan(vec![wait_step("danger", RiskLevel::High)]);
+        let result = validate_execution_policy(
+            &context(),
+            &snapshot(),
+            &plan,
+            12,
+            &crate::settings::ApprovalPolicy::Balanced,
+            &["danger".to_string()],
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn always_ask_policy_requires_approval_for_all_steps() {
+        let plan = plan(vec![wait_step("safe", RiskLevel::Low)]);
+        assert!(
+            validate_execution_policy(
+                &context(),
+                &snapshot(),
+                &plan,
+                12,
+                &crate::settings::ApprovalPolicy::AlwaysAsk,
+                &[],
+            )
+            .is_err()
+        );
+        assert!(
+            validate_execution_policy(
+                &context(),
+                &snapshot(),
+                &plan,
+                12,
+                &crate::settings::ApprovalPolicy::AlwaysAsk,
+                &["safe".to_string()],
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn cancellation_stops_execution_and_marks_status() {
+        let plan = plan(vec![
+            wait_step("one", RiskLevel::Low),
+            wait_step("two", RiskLevel::Low),
+        ]);
+        let mut driver = MockDriver {
+            fail_on: None,
+            fail_verification: false,
+            calls: Vec::new(),
+        };
+        let token = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let report = run_steps(&mut driver, &plan, Duration::ZERO, Some(&token));
+        assert_eq!(report.status, ExecutionStatus::Cancelled);
+        assert_eq!(report.completed_steps, 0);
+        assert!(driver.calls.is_empty());
     }
 
     #[test]
@@ -1666,9 +1934,29 @@ mod tests {
             wait_step("one", RiskLevel::Low),
             wait_step("two", RiskLevel::Low),
         ]);
-        assert!(validate_execution_policy(&context(), &snapshot(), &plan, 1).is_err());
+        assert!(
+            validate_execution_policy(
+                &context(),
+                &snapshot(),
+                &plan,
+                1,
+                &crate::settings::ApprovalPolicy::Balanced,
+                &[],
+            )
+            .is_err()
+        );
         let mut wrong_snapshot = snapshot();
         wrong_snapshot.target.process_id = 7;
-        assert!(validate_execution_policy(&context(), &wrong_snapshot, &plan, 12).is_err());
+        assert!(
+            validate_execution_policy(
+                &context(),
+                &wrong_snapshot,
+                &plan,
+                12,
+                &crate::settings::ApprovalPolicy::Balanced,
+                &[],
+            )
+            .is_err()
+        );
     }
 }

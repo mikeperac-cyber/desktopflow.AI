@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_RUNTIME_STATUS, DEFAULT_SETTINGS, type PlanningResult } from "../types/settings";
 import {
   createActionPlan,
+  emergencyStop,
   executeActionPlan,
   hideWindow,
   loadRuntimeStatus,
@@ -15,6 +16,8 @@ import { Spotlight } from "./Spotlight";
 
 vi.mock("../services/desktop", () => ({
   createActionPlan: vi.fn(),
+  emergencyStop: vi.fn().mockResolvedValue(true),
+  cancelExecution: vi.fn().mockResolvedValue(true),
   executeActionPlan: vi.fn(),
   hideWindow: vi.fn().mockResolvedValue(undefined),
   loadRuntimeStatus: vi.fn(),
@@ -56,6 +59,38 @@ const planningResult: PlanningResult = {
       },
       risk: "low",
       requires_user_approval: false,
+    }],
+  },
+};
+
+const highRiskPlanningResult: PlanningResult = {
+  ...planningResult,
+  provider_request_id: "interaction-high-risk",
+  plan: {
+    status: "ready",
+    title: "Delete file",
+    summary: "Would delete a selected file.",
+    overall_risk: "high",
+    steps: [{
+      id: "step-del",
+      kind: "click",
+      target_id: "uia-0005",
+      text: null,
+      keys: [],
+      scroll_direction: null,
+      amount: null,
+      duration_ms: null,
+      description: "Click Delete button",
+      expected_result: "File is deleted",
+      verification: {
+        kind: "element_exists",
+        target_id: "uia-0005",
+        expected_text: null,
+        expected_bool: false,
+        timeout_ms: 1000,
+      },
+      risk: "high",
+      requires_user_approval: true,
     }],
   },
 };
@@ -117,11 +152,68 @@ describe("Spotlight", () => {
     expect(await screen.findByText("Verified 1 of 1 actions")).toBeInTheDocument();
   });
 
-  it("closes the overlay when Escape is pressed", async () => {
+  it("requires granular approval for high-risk actions before execution", async () => {
+    const user = userEvent.setup();
+    vi.mocked(createActionPlan).mockResolvedValue(highRiskPlanningResult);
+    render(<Spotlight />);
+
+    const input = await screen.findByPlaceholderText("Ask DeskFlow what to do...");
+    await user.type(input, "Delete file{enter}");
+
+    expect(await screen.findByText("Delete file", { selector: "h2" })).toBeInTheDocument();
+    expect(screen.getByText(/1 of 1 actions require explicit approval/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Review and run plan" }));
+    const confirmButton = screen.getByRole("button", { name: "Confirm & run 1 step" });
+    expect(confirmButton).toBeDisabled();
+    expect(screen.getByText("Please approve all required actions before running.")).toBeInTheDocument();
+
+    const approvalCheckbox = screen.getByRole("checkbox", { name: "Approve high-risk action" });
+    await user.click(approvalCheckbox);
+    expect(confirmButton).toBeEnabled();
+
+    await user.click(confirmButton);
+    expect(executeActionPlan).toHaveBeenCalledWith(
+      "interaction-high-risk",
+      "overlay",
+      ["step-del"],
+      12,
+    );
+  });
+
+  it("surfaces emergency stopped status copy and report", async () => {
+    const user = userEvent.setup();
+    vi.mocked(executeActionPlan).mockResolvedValue({
+      started_at_unix_ms: 2,
+      finished_at_unix_ms: 3,
+      status: "emergency_stopped",
+      total_steps: 1,
+      completed_steps: 0,
+      plan_attempts: 1,
+      replan_attempts: 0,
+      recovered: false,
+      step_results: [],
+      failure_message: "Emergency stop signal received",
+      recovery_failure_message: null,
+    });
+    render(<Spotlight />);
+
+    const input = await screen.findByPlaceholderText("Ask DeskFlow what to do...");
+    await user.type(input, "Open settings{enter}");
+
+    await user.click(await screen.findByRole("button", { name: "Review and run plan" }));
+    await user.click(screen.getByRole("button", { name: "Confirm & run 1 step" }));
+
+    expect(await screen.findByText("Emergency stopped · Synthetic inputs released")).toBeInTheDocument();
+    expect(screen.getByText(/Emergency stop triggered · Released inputs after 0 verified actions/)).toBeInTheDocument();
+  });
+
+  it("closes the overlay when Escape is pressed while idle", async () => {
     const user = userEvent.setup();
     render(<Spotlight />);
 
     await user.keyboard("{Escape}");
     expect(hideWindow).toHaveBeenCalledWith("overlay");
+    expect(emergencyStop).not.toHaveBeenCalled();
   });
 });
