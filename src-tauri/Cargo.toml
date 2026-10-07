@@ -1,6 +1,6 @@
 [package]
 name = "deskflow-ai"
-version = "0.1.0"
+version = "1.0.0"
 description = "A safe AI command layer for Windows desktop workflows"
 authors = ["DeskFlow AI"]
 edition = "2024"
