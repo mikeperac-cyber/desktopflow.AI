@@ -103,8 +103,22 @@ export async function clearTargetHighlight(): Promise<void> {
 }
 
 const BROWSER_PROVIDER_CATALOG: ProviderCatalog = {
-  selected: "gemini",
+  selected: "local",
   providers: [
+    {
+      provider: "local",
+      label: "Local (Free)",
+      description: "Free on-device planning through a local Ollama-compatible model server.",
+      notice: "No API key needed and plans never leave this PC. Install Ollama, run `ollama pull qwen3:8b`, and keep the local server running.",
+      configured: false,
+      credential_source: null,
+      requires_credential: false,
+      supports_screenshot: false,
+      models: [
+        { profile: "fast", id: "qwen3:4b", label: "Qwen3 4B · Fast", stability: "local" },
+        { profile: "reasoning", id: "qwen3:8b", label: "Qwen3 8B · Reasoning", stability: "local" },
+      ],
+    },
     {
       provider: "gemini",
       label: "Google Gemini",
@@ -113,6 +127,7 @@ const BROWSER_PROVIDER_CATALOG: ProviderCatalog = {
       configured: false,
       credential_source: null,
       supports_screenshot: true,
+      requires_credential: true,
       models: [
         { profile: "fast", id: "gemini-3.8-flash", label: "Gemini 3.8 Flash", stability: "stable" },
         { profile: "reasoning", id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro", stability: "preview" },
@@ -126,6 +141,7 @@ const BROWSER_PROVIDER_CATALOG: ProviderCatalog = {
       configured: false,
       credential_source: null,
       supports_screenshot: true,
+      requires_credential: true,
       models: [
         { profile: "fast", id: "gpt-5.6-luna", label: "GPT 5.6 Luna", stability: "stable" },
         { profile: "reasoning", id: "gpt-6-astra", label: "GPT 6 Astra", stability: "stable" },
@@ -139,6 +155,7 @@ const BROWSER_PROVIDER_CATALOG: ProviderCatalog = {
       configured: false,
       credential_source: null,
       supports_screenshot: false,
+      requires_credential: true,
       models: [
         { profile: "fast", id: "glm-5.3-flash", label: "GLM-5.3 Flash", stability: "current" },
         { profile: "reasoning", id: "gpt-5.6-luna", label: "GPT 5.6 Luna", stability: "current" },
@@ -152,6 +169,7 @@ const BROWSER_PROVIDER_CATALOG: ProviderCatalog = {
       configured: false,
       credential_source: null,
       supports_screenshot: true,
+      requires_credential: true,
       models: [
         { profile: "fast", id: "openai/gpt-5.6-luna", label: "GPT 5.6 Luna", stability: "routed" },
         { profile: "reasoning", id: "openai/gpt-5.6-sol", label: "GPT 5.6 Sol", stability: "routed" },
@@ -165,6 +183,7 @@ const BROWSER_PROVIDER_CATALOG: ProviderCatalog = {
       configured: false,
       credential_source: null,
       supports_screenshot: true,
+      requires_credential: true,
       models: [
         { profile: "fast", id: "qwen/qwen3.5-122b-a10b", label: "Qwen 3.5 122B · Fast", stability: "hosted" },
         { profile: "reasoning", id: "qwen/qwen3.5-122b-a10b", label: "Qwen 3.5 122B · Reasoning", stability: "hosted" },
@@ -178,6 +197,7 @@ const BROWSER_PROVIDER_CATALOG: ProviderCatalog = {
       configured: false,
       credential_source: null,
       supports_screenshot: true,
+      requires_credential: true,
       models: [
         { profile: "fast", id: "gpt-5.6-luna", label: "GPT 5.6 Luna", stability: "stable" },
         { profile: "reasoning", id: "gpt-5.6-sol", label: "GPT 5.6 Sol", stability: "stable" },
@@ -191,6 +211,7 @@ const BROWSER_PROVIDER_CATALOG: ProviderCatalog = {
       configured: false,
       credential_source: null,
       supports_screenshot: true,
+      requires_credential: true,
       models: [
         { profile: "fast", id: "claude-haiku-4-5", label: "Claude Haiku 4.5", stability: "stable" },
         { profile: "reasoning", id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5", stability: "stable" },

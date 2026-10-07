@@ -2,6 +2,7 @@ export type ThemePreference = "system" | "light" | "dark";
 export type ApprovalPolicy = "balanced" | "always_ask";
 export type PlanningModel = "fast" | "reasoning";
 export type AiProviderKind =
+  | "local"
   | "gemini"
   | "opencode_zen"
   | "opencode_go"
@@ -275,6 +276,7 @@ export interface ProviderStatus {
   notice: string | null;
   configured: boolean;
   credential_source: string | null;
+  requires_credential: boolean;
   supports_screenshot: boolean;
   models: ProviderModel[];
 }
@@ -293,7 +295,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   execution_delay_ms: 250,
   approval_policy: "balanced",
   maximum_autonomous_steps: 12,
-  ai_provider: "gemini",
+  ai_provider: "local",
   ai_model: "fast",
   screenshot_transmission: false,
   diagnostic_logging: false,

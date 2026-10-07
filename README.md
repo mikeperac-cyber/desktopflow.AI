@@ -25,7 +25,7 @@ The product is uncompromisingly safe: AI output is untrusted and bounded to an a
 - normalized temporary element/parent IDs, roles, physical bounds, states, and supported patterns
 - searchable Advanced Developer Inspector with large-tree filtering and truncation reporting
 - keyboard-selectable inspector rows and a non-focusable, click-through physical-pixel target frame
-- provider-neutral native AI interface with allowlisted Gemini, OpenCode Zen, OpenCode Go, OpenRouter, NVIDIA NIM, OpenAI, and Anthropic adapters
+- provider-neutral native AI interface with free on-device `Local (Free)` default plus allowlisted Gemini, OpenCode Zen, OpenCode Go, OpenRouter, NVIDIA NIM, OpenAI, and Anthropic adapters
 - provider-specific fast/reasoning profiles and API dialects, including strict Responses, chat-completions, guided JSON, and Anthropic structured output
 - per-provider Windows Credential Manager storage with environment-variable fallback and no secret material in settings, localStorage, logs, or Git
 - strict structured action schema, current-target ID validation, password-name redaction, bounded payloads, and token usage reporting
@@ -59,7 +59,7 @@ npm run tauri dev
 
 The app starts in the system tray. Press `Alt + Space` or left-click the tray icon to open the overlay. Right-click the tray icon for Settings, Pause automation, and Quit.
 
-Open **Settings → AI**, choose a provider, enter its API key, and save the provider selection. Each key is stored under an isolated DeskFlow target in Windows Credential Manager. The password field is cleared immediately after the native save command and the key is never added to `settings.json`.
+Open **Settings → AI**. The default `Local (Free)` provider needs no key: install Ollama, run `ollama pull qwen3:8b`, and keep `ollama serve` running. For hosted providers, choose a provider, enter its API key, and save the provider selection. Each key is stored under an isolated DeskFlow target in Windows Credential Manager. The password field is cleared immediately after the native save command and the key is never added to `settings.json`.
 
 For development, native-process environment variables remain supported: `GOOGLE_API_KEY`/`GEMINI_API_KEY`, `OPENCODE_ZEN_API_KEY`, `OPENCODE_GO_API_KEY`, `OPENROUTER_API_KEY`, `NVIDIA_API_KEY`, `OPENAI_API_KEY`, and `ANTHROPIC_API_KEY`. A Credential Manager value takes precedence. `OPENCODE_API_KEY` is a shared fallback for either OpenCode service.
 

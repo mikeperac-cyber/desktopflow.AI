@@ -147,8 +147,22 @@ describe("SettingsPanel", () => {
     vi.mocked(loadLastUiAutomation).mockResolvedValue(null);
     vi.mocked(loadLastActionPlan).mockResolvedValue(null);
     vi.mocked(loadAiProviderStatus).mockResolvedValue({
-      selected: "gemini",
+      selected: "local",
       providers: [
+        {
+          provider: "local",
+          label: "Local (Free)",
+          description: "Free on-device planning through a local Ollama-compatible model server.",
+          notice: "No API key needed and plans never leave this PC. Install Ollama, run `ollama pull qwen3:8b`, and keep the local server running.",
+          configured: false,
+          credential_source: null,
+          requires_credential: false,
+          supports_screenshot: false,
+          models: [
+            { profile: "fast", id: "qwen3:4b", label: "Qwen3 4B · Fast", stability: "local" },
+            { profile: "reasoning", id: "qwen3:8b", label: "Qwen3 8B · Reasoning", stability: "local" },
+          ],
+        },
         {
           provider: "gemini",
           label: "Google Gemini",
@@ -156,6 +170,7 @@ describe("SettingsPanel", () => {
           notice: null,
           configured: false,
           credential_source: null,
+          requires_credential: true,
           supports_screenshot: true,
           models: [
             { profile: "fast", id: "gemini-3.8-flash", label: "Gemini 3.8 Flash", stability: "stable" },
@@ -191,11 +206,27 @@ describe("SettingsPanel", () => {
     expect(await screen.findByText("Settings saved.")).toBeInTheDocument();
   });
 
+  it("shows the free local engine without any credential field", async () => {
+    const user = userEvent.setup();
+    render(<SettingsPanel />);
+
+    await user.click(await screen.findByRole("button", { name: "AI" }));
+    expect(await screen.findByRole("heading", { name: "Local (Free)" })).toBeInTheDocument();
+    expect(screen.getByText("Needs local model")).toBeInTheDocument();
+    expect(screen.getByText("Free local engine")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Local (Free) API key")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate plan" })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(hideWindow).toHaveBeenCalledWith("settings");
+  });
+
   it("shows the native AI provider configuration and closes without saving", async () => {
     const user = userEvent.setup();
     render(<SettingsPanel />);
 
     await user.click(await screen.findByRole("button", { name: "AI" }));
+    await user.selectOptions(screen.getByLabelText("Provider"), "gemini");
     expect(await screen.findByRole("heading", { name: "Google Gemini" })).toBeInTheDocument();
     expect(screen.getByText("Needs API key")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Generate plan" })).toBeDisabled();
@@ -215,6 +246,7 @@ describe("SettingsPanel", () => {
         notice: null,
         configured: true,
         credential_source: "windows_credential_manager",
+        requires_credential: true,
         supports_screenshot: true,
         models: [
           { profile: "fast", id: "gemini-3.8-flash", label: "Gemini 3.8 Flash", stability: "stable" },
@@ -225,6 +257,7 @@ describe("SettingsPanel", () => {
     render(<SettingsPanel />);
 
     await user.click(await screen.findByRole("button", { name: "AI" }));
+    await user.selectOptions(screen.getByLabelText("Provider"), "gemini");
     const key = screen.getByLabelText("Google Gemini API key");
     await user.type(key, "test-secret-key");
     await user.click(screen.getByRole("button", { name: "Save key" }));
@@ -246,6 +279,7 @@ describe("SettingsPanel", () => {
           notice: null,
           configured: false,
           credential_source: null,
+          requires_credential: true,
           supports_screenshot: true,
           models: [],
         },
@@ -256,6 +290,7 @@ describe("SettingsPanel", () => {
           notice: null,
           configured: true,
           credential_source: "windows_credential_manager",
+          requires_credential: true,
           supports_screenshot: true,
           models: [
             { profile: "fast", id: "gpt-5.6-luna", label: "GPT 5.6 Luna", stability: "stable" },

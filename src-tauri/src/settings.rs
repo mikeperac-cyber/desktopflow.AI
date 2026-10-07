@@ -55,7 +55,7 @@ impl Default for AppSettings {
             execution_delay_ms: 250,
             approval_policy: ApprovalPolicy::Balanced,
             maximum_autonomous_steps: 12,
-            ai_provider: AiProviderKind::Gemini,
+            ai_provider: AiProviderKind::Local,
             ai_model: default_ai_model(),
             screenshot_transmission: false,
             diagnostic_logging: false,

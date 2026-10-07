@@ -161,6 +161,20 @@ Outcome: hardened distributable NSIS/MSI installer bundles, complete test gates,
 - [x] finalize release, security/privacy, and troubleshooting documentation across README, ARCHITECTURE, and TESTING
 - [x] review final product assets, high-contrast states, and icons (full ICO, PNG, and StoreLogo suite)
 
+## Phase 13 — Free local engine (implemented)
+
+Outcome: planning works with no API key through a free on-device model server. `Local (Free)` is the default provider for new installs; hosted BYOK providers are unchanged.
+
+- [x] loopback-pinned Ollama-compatible chat adapter (`127.0.0.1:11434`, no custom URLs, no auth header, no secret)
+- [x] allowlisted local models only (`qwen3:4b` fast, `qwen3:8b` reasoning)
+- [x] same typed action/verification schema, redaction, step limits, and Rust semantic validation as hosted plans
+- [x] text-only local profiles; screenshot transmission rejected with guidance
+- [x] 300-second local planning budget vs 45 seconds hosted
+- [x] keyless credential boundary (save/remove rejected with guidance)
+- [x] synchronous 300 ms loopback reachability probe drives Configured/Ready status
+- [x] keyless settings UI with Ollama setup guidance
+- [x] mocked-transport adapter tests plus screenshot-rejection test
+
 ## MVP non-goals
 
 Cloud accounts, collaboration, marketplace, browser extensions, remote control, non-Windows platforms, arbitrary shell execution, and providers beyond the current allowlisted set remain out of scope.

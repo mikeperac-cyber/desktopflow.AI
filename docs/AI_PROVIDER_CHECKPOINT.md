@@ -14,6 +14,7 @@ Revalidated against official provider documentation on 2026-10-05. Model IDs, en
 | Provider | Endpoint shape | Fast profile | Reasoning profile | Structured output |
 | --- | --- | --- | --- | --- |
 | Google Gemini | Interactions v1 | `gemini-3.8-flash` | `gemini-3.1-pro-preview` | Gemini JSON Schema response format |
+| Local (Free) | Pinned loopback `127.0.0.1:11434/api/chat` (Ollama dialect, no auth, no custom URLs) | `qwen3:4b` | `qwen3:8b` | Ollama `format` JSON Schema; text-only; local validation remains authoritative |
 | OpenCode Zen | `/zen/v1/responses` | `gpt-5.6-luna` | `gpt-6-astra` | OpenAI Responses `text.format` |
 | OpenCode Go | `/zen/go/v1/chat/completions` or `/responses` | `glm-5.3-flash` | `gpt-5.6-luna` | JSON Schema response format; local validation remains authoritative |
 | OpenRouter | `/api/v1/chat/completions` | `openai/gpt-5.6-luna` | `openai/gpt-5.6-sol` | `response_format.json_schema` with `require_parameters=true` |

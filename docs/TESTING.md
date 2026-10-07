@@ -88,7 +88,10 @@ For the read-only native core probe, build `cargo build --manifest-path src-taur
 
 ## AI provider and credential smoke gate
 
-1. Open **Settings → AI**, select a provider, enter its API key locally, and save the provider selection. Never paste a real key into chat, a repository file, browser localStorage, or test output.
+1. With no API key, confirm **Settings → AI** defaults to **Local (Free)** with status **Needs local model** and no password field.
+2. Install Ollama, run `ollama pull qwen3:8b`, and start `ollama serve`. Reopen AI settings and confirm the local provider reports **Ready · on this PC**.
+3. Submit a harmless instruction on a safe target and confirm a validated local plan arrives with a `local-*` request ID and no credential prompt.
+4. Open **Settings → AI**, select a provider, enter its API key locally, and save the provider selection. Never paste a real key into chat, a repository file, browser localStorage, or test output.
 2. Confirm the password field clears, the provider reports **Configured**, and Windows Credential Manager contains an isolated `DeskFlow AI/provider/<provider>` generic credential. The UI must never reveal the saved value.
 3. Restart DeskFlow and confirm the provider remains configured. Remove the saved key and confirm the status becomes unconfigured unless a supported native environment variable exists.
 4. Repeat credential save/remove for each intended provider without overwriting another provider's status.

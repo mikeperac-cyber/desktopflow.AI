@@ -162,7 +162,15 @@ export function AiSettings({
             <h2 id="ai-provider-heading">{activeProvider?.label ?? "AI provider"}</h2>
           </div>
           <span className={`provider-status ${activeProvider?.configured ? "provider-status--ready" : ""}`}>
-            {activeProvider?.configured ? "Configured" : "Needs API key"}
+            {activeProvider
+              ? activeProvider.configured
+                ? activeProvider.requires_credential
+                  ? "Configured"
+                  : "Ready · on this PC"
+                : activeProvider.requires_credential
+                  ? "Needs API key"
+                  : "Needs local model"
+              : "Needs API key"}
           </span>
         </div>
         <p className="ai-provider-copy">
@@ -187,6 +195,23 @@ export function AiSettings({
           <div className="provider-setup-note">Save settings to make {activeProvider?.label ?? "this provider"} active.</div>
         ) : null}
         {activeProvider?.notice ? <div className="provider-setup-note">{activeProvider.notice}</div> : null}
+        {activeProvider && !activeProvider.requires_credential ? (
+          <div className="credential-editor">
+            <div className="credential-heading">
+              <div>
+                <strong>Free local engine</strong>
+                <small>
+                  {activeProvider.configured
+                    ? "Local model server reachable"
+                    : "Local model server not detected"}
+                </small>
+              </div>
+            </div>
+            <p>No API key is needed and plans never leave this PC. To enable free planning:</p>
+            <p>1. Install Ollama from ollama.com. 2. Run <code>ollama pull qwen3:8b</code>. 3. Keep <code>ollama serve</code> running.</p>
+            <p>DeskFlow talks only to 127.0.0.1:11434 and validates every local plan with the same Rust safety checks as hosted providers.</p>
+          </div>
+        ) : (
         <div className="credential-editor">
           <div className="credential-heading">
             <div>
@@ -233,6 +258,7 @@ export function AiSettings({
           {credentialMessage ? <div className="inline-success" role="status">{credentialMessage}</div> : null}
           {credentialError ? <div className="inline-error" role="alert">{credentialError}</div> : null}
         </div>
+        )}
       </section>
 
       <section className="settings-group" aria-labelledby="ai-model-heading">
