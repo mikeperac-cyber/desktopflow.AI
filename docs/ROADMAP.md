@@ -210,6 +210,17 @@ Outcome: saved instructions run on time or on file arrival through the unchanged
 - [x] Schedules settings section with run history, arm/pause, and delete
 - [x] unit tests for slot math, glob matching, and settings validation plus UI tests
 
+## Phase 17 — Local operator memory (implemented)
+
+Outcome: the operator's own long-lived notes disambiguate planning without changing any gate. Memories live in a local file, match by app or globally, and reach prompts as a bounded labeled section.
+
+- [x] `memory.json` beside settings with validated bounds (100 entries, short plain text, unique IDs)
+- [x] global entries plus exact case-insensitive process matches; at most 5 entries / 2,000 chars per prompt
+- [x] memory labeled as user-supplied context, never verified fact, in every prompt that carries it
+- [x] prompts without memory are byte-identical to before
+- [x] Privacy UI with add, forget, purge-all, and hosted-transmission disclosure
+- [x] unit tests for matching, validation, and prompt bounds plus UI tests
+
 ## MVP non-goals
 
 Cloud accounts, collaboration, marketplace, browser extensions, remote control, non-Windows platforms, arbitrary shell execution, and providers beyond the current allowlisted set remain out of scope.

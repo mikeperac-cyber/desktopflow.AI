@@ -6,6 +6,7 @@ mod error;
 pub mod executor;
 mod highlight;
 mod hotkeys;
+pub mod memory;
 pub mod recorder;
 pub mod runtime;
 pub mod scheduler;
@@ -86,6 +87,10 @@ pub fn run() {
             commands::create_action_plan,
             commands::get_recording_status,
             commands::get_schedule_runs,
+            commands::get_memories,
+            commands::add_memory,
+            commands::delete_memory,
+            commands::purge_memories,
             commands::start_recording,
             commands::stop_recording,
             commands::execute_action_plan,

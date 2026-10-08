@@ -11,6 +11,7 @@ use crate::{
     executor::{self, ExecutionReport},
     highlight::{self, TargetHighlight},
     hotkeys,
+    memory::{self, MemoryEntry},
     recorder::{self, RecordingStatus},
     runtime::{RuntimeState, RuntimeStatus},
     settings::{self, AppSettings},
@@ -218,12 +219,14 @@ pub async fn create_action_plan(
     let provider_kind = state.settings().ai_provider;
     let provider = ai::create_provider(provider_kind)?;
     let stored_request = request.clone();
+    let memory_context = memory::context_for_process(&app, context.process.name.as_deref());
     let result = provider
         .create_plan(ai::ProviderPlanningInput {
             request,
             context,
             automation,
             recovery: None,
+            memory_context,
         })
         .await?;
     state.set_action_plan(stored_request, result.clone());
@@ -251,6 +254,44 @@ pub fn get_schedule_runs(state: State<'_, RuntimeState>) -> Vec<crate::scheduler
     let mut runs = state.schedule_runs();
     runs.reverse();
     runs
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MemoryEntryRequest {
+    subject: String,
+    content: String,
+}
+
+#[tauri::command]
+pub fn get_memories(app: AppHandle) -> AppResult<Vec<MemoryEntry>> {
+    memory::load_all(&app)
+}
+
+#[tauri::command]
+pub fn add_memory(app: AppHandle, request: MemoryEntryRequest) -> AppResult<Vec<MemoryEntry>> {
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|value| value.as_millis() as u64)
+        .unwrap_or(0);
+    memory::add(
+        &app,
+        MemoryEntry {
+            id: format!("mem-{timestamp}"),
+            subject: request.subject,
+            content: request.content,
+            created_at_unix_ms: timestamp,
+        },
+    )
+}
+
+#[tauri::command]
+pub fn delete_memory(app: AppHandle, id: String) -> AppResult<Vec<MemoryEntry>> {
+    memory::remove(&app, &id)
+}
+
+#[tauri::command]
+pub fn purge_memories(app: AppHandle) -> AppResult<Vec<MemoryEntry>> {
+    memory::purge(&app)
 }
 
 #[tauri::command]
@@ -556,6 +597,10 @@ pub async fn execute_action_plan(
                         failure_kind,
                         completed_step_ids,
                     }),
+                    memory_context: memory::context_for_process(
+                        &app,
+                        fresh_context.process.name.as_deref(),
+                    ),
                 })
                 .await;
             let fresh_plan = match recovery_plan {

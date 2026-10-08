@@ -2,6 +2,7 @@ import { type FormEvent, type KeyboardEvent, useEffect, useMemo, useState } from
 
 import { Icon } from "./Icon";
 import { AiSettings } from "./AiSettings";
+import { MemoryManager } from "./MemoryManager";
 import { SchedulesSection } from "./SchedulesSection";
 import { ContextInspector } from "./ContextInspector";
 import { WindowChrome } from "./WindowChrome";
@@ -293,6 +294,7 @@ function PrivacySettings({
 
   return (
     <div className="settings-content-section">
+      <MemoryManager />
       <section className="settings-group" aria-labelledby="privacy-storage-heading">
         <h2 id="privacy-storage-heading">Credential & context security</h2>
         <div className="privacy-feature-list">

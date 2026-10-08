@@ -3,10 +3,12 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  addMemory,
   captureActiveWindow,
   clearDiagnosticLogs,
   clearLocalCache,
   clearTargetHighlight,
+  deleteMemory,
   getDiagnosticLogs,
   hideWindow,
   highlightUiElement,
@@ -15,9 +17,11 @@ import {
   loadLastActionPlan,
   loadLastUiAutomation,
   loadLastWindowContext,
+  loadMemories,
   loadRuntimeStatus,
   loadScheduleRuns,
   loadSettings,
+  purgeMemories,
   saveAiProviderCredential,
   saveSettings,
 } from "../services/desktop";
@@ -41,6 +45,10 @@ vi.mock("../services/desktop", () => ({
   getDiagnosticLogs: vi.fn().mockResolvedValue([
     { timestamp_unix_ms: 1000, level: "info", category: "test", message: "System initialized" },
   ]),
+  addMemory: vi.fn(),
+  deleteMemory: vi.fn(),
+  purgeMemories: vi.fn().mockResolvedValue([]),
+  loadMemories: vi.fn(),
   hideWindow: vi.fn().mockResolvedValue(undefined),
   highlightUiElement: vi.fn(),
   inspectTargetUi: vi.fn(),
@@ -146,6 +154,7 @@ describe("SettingsPanel", () => {
     vi.mocked(loadSettings).mockResolvedValue({ ...DEFAULT_SETTINGS });
     vi.mocked(loadRuntimeStatus).mockResolvedValue({ ...DEFAULT_RUNTIME_STATUS });
     vi.mocked(loadScheduleRuns).mockResolvedValue([]);
+    vi.mocked(loadMemories).mockResolvedValue([]);
     vi.mocked(loadLastWindowContext).mockResolvedValue(null);
     vi.mocked(loadLastUiAutomation).mockResolvedValue(null);
     vi.mocked(loadLastActionPlan).mockResolvedValue(null);
@@ -494,6 +503,54 @@ describe("SettingsPanel", () => {
         }),
       );
     });
+  });
+
+  it("remembers and forgets local memories", async () => {
+    const user = userEvent.setup();
+    vi.mocked(addMemory).mockResolvedValue([
+      {
+        id: "mem-1",
+        subject: "notepad.exe",
+        content: "Keep word wrap on.",
+        created_at_unix_ms: 1_800_000_000_000,
+      },
+    ]);
+    vi.mocked(deleteMemory).mockResolvedValue([]);
+    render(<SettingsPanel />);
+
+    await user.click(await screen.findByRole("button", { name: "Privacy" }));
+    expect(await screen.findByRole("heading", { name: "Local memory" })).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("App (optional)"), "notepad.exe");
+    await user.type(screen.getByLabelText("Memory"), "Keep word wrap on.");
+    await user.click(screen.getByRole("button", { name: "Remember this" }));
+
+    expect(addMemory).toHaveBeenCalledWith("notepad.exe", "Keep word wrap on.");
+    expect(await screen.findByText(/Keep word wrap on/)).toBeInTheDocument();
+
+    vi.mocked(loadMemories).mockResolvedValue([]);
+    await user.click(screen.getByRole("button", { name: "Forget" }));
+    expect(deleteMemory).toHaveBeenCalledWith("mem-1");
+  });
+
+  it("purges every memory at once", async () => {
+    const user = userEvent.setup();
+    vi.mocked(loadMemories).mockResolvedValue([
+      {
+        id: "mem-2",
+        subject: "",
+        content: "Confirm before closing windows.",
+        created_at_unix_ms: 1_800_000_000_000,
+      },
+    ]);
+    vi.mocked(purgeMemories).mockResolvedValue([]);
+    render(<SettingsPanel />);
+
+    await user.click(await screen.findByRole("button", { name: "Privacy" }));
+    expect(await screen.findByText(/Confirm before closing/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Forget everything" }));
+    expect(purgeMemories).toHaveBeenCalledOnce();
+    expect(await screen.findByText(/plans from fresh observation alone/)).toBeInTheDocument();
   });
 
   it("navigates through settings sections using arrow keys and home/end", async () => {

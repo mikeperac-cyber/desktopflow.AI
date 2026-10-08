@@ -148,6 +148,13 @@ The specific-HWND capture helper exists only for local developer probes and is n
 5. Create a file-appearance schedule on an empty temp folder, drop in a matching file, and confirm it fires once — pre-existing files must never fire.
 6. Confirm no run starts while paused, while a recording runs, or while another plan awaits review.
 
+## Phase 17 local memory smoke gate
+
+1. In **Settings → Privacy → Local memory**, save a global note and an app-scoped note for Notepad.
+2. Generate a plan on Notepad and confirm the plan metadata path works end to end (memory is invisible in the UI; it only disambiguates planning).
+3. Forget one memory and confirm it disappears; purge everything and confirm the empty state returns.
+4. Confirm `memory.json` in the app config directory holds only what you entered, and that removing the file is harmless (it recreates empty).
+
 ## Release build
 
 ```powershell

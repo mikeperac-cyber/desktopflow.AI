@@ -320,6 +320,13 @@ export interface ScheduleRun {
   detail: string;
 }
 
+export interface MemoryEntry {
+  id: string;
+  subject: string;
+  content: string;
+  created_at_unix_ms: number;
+}
+
 export interface RecordingStatus {
   recording: boolean;
   event_count: number;

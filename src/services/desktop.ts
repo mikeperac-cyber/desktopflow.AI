@@ -8,6 +8,7 @@ import {
   type CommandError,
   type DiagnosticLogEntry,
   type ExecutionReport,
+  type MemoryEntry,
   type RecordingStatus,
   type RuntimeStatus,
   type ScheduleRun,
@@ -318,6 +319,43 @@ export async function loadScheduleRuns(): Promise<ScheduleRun[]> {
     return invoke<ScheduleRun[]>("get_schedule_runs");
   }
   return [];
+}
+
+export async function loadMemories(): Promise<MemoryEntry[]> {
+  if (isTauri()) {
+    return invoke<MemoryEntry[]>("get_memories");
+  }
+  return [];
+}
+
+export async function addMemory(subject: string, content: string): Promise<MemoryEntry[]> {
+  if (isTauri()) {
+    return invoke<MemoryEntry[]>("add_memory", { request: { subject, content } });
+  }
+  throw {
+    code: "desktop_required",
+    message: "Local memory is available in the DeskFlow desktop app.",
+  } satisfies CommandError;
+}
+
+export async function deleteMemory(id: string): Promise<MemoryEntry[]> {
+  if (isTauri()) {
+    return invoke<MemoryEntry[]>("delete_memory", { id });
+  }
+  throw {
+    code: "desktop_required",
+    message: "Local memory is available in the DeskFlow desktop app.",
+  } satisfies CommandError;
+}
+
+export async function purgeMemories(): Promise<MemoryEntry[]> {
+  if (isTauri()) {
+    return invoke<MemoryEntry[]>("purge_memories");
+  }
+  throw {
+    code: "desktop_required",
+    message: "Local memory is available in the DeskFlow desktop app.",
+  } satisfies CommandError;
 }
 
 export async function startRecording(): Promise<RecordingStatus> {

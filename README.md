@@ -33,6 +33,7 @@ The product is uncompromisingly safe: AI output is untrusted and bounded to an a
 - one-click action recorder: observed clicks, typing, shortcuts, and scrolling on the captured target compile to the same validated plan shape; sensitive keystrokes are never stored
 - workflow library: 20 built-in recipes plus locally saved instructions, each planned fresh with the unchanged confirmation gate
 - scheduler: attended or low-risk-only autonomous runs on time and file triggers, never while busy or mid-review
+- local memory: operator notes that disambiguate planning, stored on-device with purge control
 - UIA-first executor with bounded input fallback, stale/ambiguous target rejection, and stop-on-first-failure behavior
 - typed post-action verification, fresh-state recovery planning, a two-replan ceiling, and a total action budget across attempts
 - ESLint, TypeScript, Vitest/Testing Library, and Rust adapter/unit-test gates
