@@ -25,6 +25,7 @@ export interface AppSettings {
   screenshot_transmission: boolean;
   diagnostic_logging: boolean;
   developer_mode: boolean;
+  saved_workflows: SavedWorkflow[];
 }
 
 export interface RuntimeStatus {
@@ -286,6 +287,13 @@ export interface ProviderCatalog {
   providers: ProviderStatus[];
 }
 
+export interface SavedWorkflow {
+  id: string;
+  name: string;
+  instruction: string;
+  created_at_unix_ms: number;
+}
+
 export interface RecordingStatus {
   recording: boolean;
   event_count: number;
@@ -308,6 +316,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   screenshot_transmission: false,
   diagnostic_logging: false,
   developer_mode: false,
+  saved_workflows: [],
 };
 
 export const DEFAULT_RUNTIME_STATUS: RuntimeStatus = {

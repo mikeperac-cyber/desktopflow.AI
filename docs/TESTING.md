@@ -131,6 +131,14 @@ The specific-HWND capture helper exists only for local developer probes and is n
 7. Confirm clicking outside the target (e.g., the desktop) adds no steps.
 8. Confirm replay requires the same explicit confirmation and supports emergency stop.
 
+## Phase 15 workflow library smoke gate
+
+1. Open **Settings → AI** and confirm the **Workflow library** lists 20 built-in recipes plus any saved ones.
+2. Search "dark mode", click **Use**, and confirm the instruction field fills with the recipe text.
+3. Type a custom instruction, name it, click **Save current instruction**, then **Save settings**; reopen Settings and confirm it persists under Mine.
+4. Run a recipe end to end on its hinted app and confirm the plan still requires the second confirmation.
+5. Delete the saved recipe, save settings, and confirm it disappears and stays gone after reopen.
+
 ## Release build
 
 ```powershell

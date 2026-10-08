@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { PlanInspector } from "./PlanInspector";
+import { WorkflowLibrary } from "./WorkflowLibrary";
 import {
   createActionPlan,
   deleteAiProviderCredential,
@@ -11,12 +12,14 @@ import {
   saveAiProviderCredential,
   toUserMessage,
 } from "../services/desktop";
+import { makeUserWorkflowId } from "../lib/workflows";
 import type {
   AiProviderKind,
   ExecutionReport,
   PlanningModel,
   PlanningResult,
   ProviderCatalog,
+  SavedWorkflow,
 } from "../types/settings";
 
 interface AiSettingsProps {
@@ -26,9 +29,12 @@ interface AiSettingsProps {
   includeScreenshot: boolean;
   hasContext: boolean;
   hasUiTree: boolean;
+  savedWorkflows: SavedWorkflow[];
   onModelChange: (model: PlanningModel) => void;
   onProviderChange: (provider: AiProviderKind) => void;
   onScreenshotChange: (enabled: boolean) => void;
+  onSaveWorkflow: (workflow: SavedWorkflow) => void;
+  onDeleteWorkflow: (id: string) => void;
 }
 
 export function AiSettings({
@@ -38,9 +44,12 @@ export function AiSettings({
   includeScreenshot,
   hasContext,
   hasUiTree,
+  savedWorkflows,
   onModelChange,
   onProviderChange,
   onScreenshotChange,
+  onSaveWorkflow,
+  onDeleteWorkflow,
 }: AiSettingsProps) {
   const [catalog, setCatalog] = useState<ProviderCatalog | null>(null);
   const [apiKey, setApiKey] = useState("");
@@ -300,6 +309,21 @@ export function AiSettings({
           <p className="provider-capability-note">Screenshot transmission is unavailable for this provider profile; the filtered UI tree is still used.</p>
         ) : null}
       </section>
+
+      <WorkflowLibrary
+        currentInstruction={instruction}
+        onDelete={onDeleteWorkflow}
+        onSave={(name) =>
+          onSaveWorkflow({
+            id: makeUserWorkflowId(),
+            name,
+            instruction: instruction.trim(),
+            created_at_unix_ms: Date.now(),
+          })
+        }
+        onUse={(nextInstruction) => setInstruction(nextInstruction)}
+        savedWorkflows={savedWorkflows}
+      />
 
       <section className="settings-group ai-plan-builder" aria-labelledby="plan-builder-heading">
         <div className="context-section-heading">

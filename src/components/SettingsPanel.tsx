@@ -576,9 +576,18 @@ export function SettingsPanel() {
                 model={draft.ai_model}
                 provider={draft.ai_provider}
                 providerSelectionSaved={draft.ai_provider === saved.ai_provider}
+                savedWorkflows={draft.saved_workflows}
                 onModelChange={(model) => updateDraft({ ai_model: model })}
                 onProviderChange={(provider) => updateDraft({ ai_provider: provider })}
                 onScreenshotChange={(enabled) => updateDraft({ screenshot_transmission: enabled })}
+                onSaveWorkflow={(workflow) =>
+                  updateDraft({ saved_workflows: [...draft.saved_workflows, workflow] })
+                }
+                onDeleteWorkflow={(id) =>
+                  updateDraft({
+                    saved_workflows: draft.saved_workflows.filter((workflow) => workflow.id !== id),
+                  })
+                }
               />
             ) : activeSection === "automation" ? (
               <AutomationSettings draft={draft} onChange={updateDraft} />

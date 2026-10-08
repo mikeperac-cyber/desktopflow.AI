@@ -189,6 +189,15 @@ Outcome: the user performs the task once on the captured target; DeskFlow turns 
 - [x] overlay Record/Stop flow with live action counts
 - [x] unit tests for mapping, redaction, truncation, validation, and hook lifecycle
 
+## Phase 15 — Workflow library (implemented)
+
+Outcome: 20 curated recipes plus user-saved instructions, all running through the unchanged validated planning pipeline. The library stores instructions, never stale action plans: element IDs expire with each capture, so every run generates a fresh plan that still needs the second confirmation.
+
+- [x] 20 bounded low-risk recipes across Files, Text, System, and Productivity with app hints
+- [x] search, category filter, and one-click fill into the AI plan builder
+- [x] user workflows persisted in local settings (50 max, bounded lengths, unique IDs, Rust-validated)
+- [x] settings and UI tests for validation, fill, save, and delete
+
 ## MVP non-goals
 
 Cloud accounts, collaboration, marketplace, browser extensions, remote control, non-Windows platforms, arbitrary shell execution, and providers beyond the current allowlisted set remain out of scope.

@@ -313,6 +313,36 @@ describe("SettingsPanel", () => {
     expect(screen.queryByText("Save settings to make OpenAI active.")).not.toBeInTheDocument();
   });
 
+  it("fills the instruction from a built-in recipe", async () => {
+    const user = userEvent.setup();
+    render(<SettingsPanel />);
+
+    await user.click(await screen.findByRole("button", { name: "AI" }));
+    expect(await screen.findByRole("heading", { name: "Workflow library" })).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Search recipes"), "dark mode");
+    await user.click(screen.getByRole("button", { name: "Use" }));
+
+    expect((screen.getByLabelText("Instruction") as HTMLTextAreaElement).value).toContain(
+      "Choose your mode to Dark",
+    );
+  });
+
+  it("saves the current instruction and deletes it again", async () => {
+    const user = userEvent.setup();
+    render(<SettingsPanel />);
+
+    await user.click(await screen.findByRole("button", { name: "AI" }));
+    await user.click((await screen.findAllByRole("button", { name: "Use" }))[0]);
+    await user.type(screen.getByLabelText("Save the current instruction"), "My recipe");
+    await user.click(screen.getByRole("button", { name: "Save current instruction" }));
+
+    expect(await screen.findByText("My recipe")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    expect(screen.queryByText("My recipe")).not.toBeInTheDocument();
+  });
+
   it("captures and displays foreground window diagnostics", async () => {
     const user = userEvent.setup();
     render(<SettingsPanel />);

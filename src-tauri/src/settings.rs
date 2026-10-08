@@ -26,6 +26,19 @@ pub enum ApprovalPolicy {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct SavedWorkflow {
+    pub id: String,
+    pub name: String,
+    pub instruction: String,
+    pub created_at_unix_ms: u64,
+}
+
+pub const MAX_SAVED_WORKFLOWS: usize = 50;
+const MAX_WORKFLOW_ID_CHARS: usize = 80;
+const MAX_WORKFLOW_NAME_CHARS: usize = 80;
+const MAX_WORKFLOW_INSTRUCTION_CHARS: usize = 4_000;
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct AppSettings {
     pub theme: ThemePreference,
     pub global_hotkey: String,
@@ -42,6 +55,8 @@ pub struct AppSettings {
     pub screenshot_transmission: bool,
     pub diagnostic_logging: bool,
     pub developer_mode: bool,
+    #[serde(default)]
+    pub saved_workflows: Vec<SavedWorkflow>,
 }
 
 impl Default for AppSettings {
@@ -60,6 +75,7 @@ impl Default for AppSettings {
             screenshot_transmission: false,
             diagnostic_logging: false,
             developer_mode: false,
+            saved_workflows: Vec::new(),
         }
     }
 }
@@ -85,8 +101,40 @@ impl AppSettings {
             ));
         }
 
+        if self.saved_workflows.len() > MAX_SAVED_WORKFLOWS {
+            return Err(AppError::InvalidSettings(format!(
+                "at most {MAX_SAVED_WORKFLOWS} saved workflows are kept"
+            )));
+        }
+        let mut workflow_ids = std::collections::HashSet::new();
+        for workflow in &self.saved_workflows {
+            validate_workflow_text("workflow id", &workflow.id, MAX_WORKFLOW_ID_CHARS)?;
+            validate_workflow_text("workflow name", &workflow.name, MAX_WORKFLOW_NAME_CHARS)?;
+            validate_workflow_text(
+                "workflow instruction",
+                &workflow.instruction,
+                MAX_WORKFLOW_INSTRUCTION_CHARS,
+            )?;
+            if !workflow_ids.insert(workflow.id.as_str()) {
+                return Err(AppError::InvalidSettings(format!(
+                    "workflow id '{}' is duplicated",
+                    workflow.id
+                )));
+            }
+        }
+
         Ok(())
     }
+}
+
+fn validate_workflow_text(label: &str, value: &str, maximum: usize) -> AppResult<()> {
+    let length = value.trim().chars().count();
+    if length == 0 || length > maximum {
+        return Err(AppError::InvalidSettings(format!(
+            "{label} must contain between 1 and {maximum} characters"
+        )));
+    }
+    Ok(())
 }
 
 fn validate_shortcut_label(label: &str, value: &str) -> AppResult<()> {
@@ -163,5 +211,51 @@ mod tests {
             ..AppSettings::default()
         };
         assert!(delayed.validate().is_err());
+    }
+
+    fn workflow_fixture(id: &str) -> SavedWorkflow {
+        SavedWorkflow {
+            id: id.to_string(),
+            name: "Rename selected file".to_string(),
+            instruction:
+                "Rename the currently selected file to 'meeting-notes.txt' and confirm with Enter."
+                    .to_string(),
+            created_at_unix_ms: 1_800_000_000_000,
+        }
+    }
+
+    #[test]
+    fn accepts_a_bounded_workflow_library() {
+        let settings = AppSettings {
+            saved_workflows: vec![workflow_fixture("user-1")],
+            ..AppSettings::default()
+        };
+        assert!(settings.validate().is_ok());
+    }
+
+    #[test]
+    fn rejects_unbounded_or_duplicate_workflows() {
+        let empty_name = AppSettings {
+            saved_workflows: vec![SavedWorkflow {
+                name: "   ".to_string(),
+                ..workflow_fixture("user-1")
+            }],
+            ..AppSettings::default()
+        };
+        assert!(empty_name.validate().is_err());
+
+        let duplicated = AppSettings {
+            saved_workflows: vec![workflow_fixture("user-1"), workflow_fixture("user-1")],
+            ..AppSettings::default()
+        };
+        assert!(duplicated.validate().is_err());
+
+        let oversized = AppSettings {
+            saved_workflows: (0..=MAX_SAVED_WORKFLOWS)
+                .map(|index| workflow_fixture(&format!("user-{index}")))
+                .collect(),
+            ..AppSettings::default()
+        };
+        assert!(oversized.validate().is_err());
     }
 }
