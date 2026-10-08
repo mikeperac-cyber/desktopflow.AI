@@ -111,4 +111,4 @@ User instruction
   -> bounded fresh-state replan when required
 ```
 
-Model output must never reach a shell, script host, registry API, or arbitrary executable path. UI content must be labeled as observed, untrusted content in every provider request.
+Model output must never reach a shell, script host, registry API, or arbitrary executable path. UI content must be labeled as observed, untrusted content in every provider request. Recorded input follows the same rule: only the allowlisted action vocabulary can emerge from the recorder, sensitive keystrokes are dropped before storage, and input delivered outside the captured HWND is ignored.

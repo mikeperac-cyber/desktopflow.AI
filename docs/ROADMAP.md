@@ -175,6 +175,20 @@ Outcome: planning works with no API key through a free on-device model server. `
 - [x] keyless settings UI with Ollama setup guidance
 - [x] mocked-transport adapter tests plus screenshot-rejection test
 
+## Phase 14 — One-click action recorder (implemented)
+
+Outcome: the user performs the task once on the captured target; DeskFlow turns observed input into the same validated plan the executor already runs. Recorded plans pass Rust semantic validation, two-stage confirmation, live fingerprint revalidation, and bounded recovery (which replans through the selected AI provider).
+
+- [x] low-level mouse/keyboard hooks on a dedicated worker thread with a message pump; hooks released exactly once
+- [x] foreground-HWND gating: input outside the captured target is ignored and counted, never stored
+- [x] click-to-element hit testing (deepest, smallest, enabled, on-screen; chrome never becomes a step)
+- [x] keystroke grouping into `type_text`, named keys, modifier shortcuts, and wheel scrolling via layout-aware translation
+- [x] password/sensitive keystrokes dropped at the boundary and counted, never stored; recorded text redacted
+- [x] 12-step ceiling with truncation reporting; empty recordings rejected with guidance
+- [x] replay binds to a `recorder-*` request ID through the unchanged confirmation gate
+- [x] overlay Record/Stop flow with live action counts
+- [x] unit tests for mapping, redaction, truncation, validation, and hook lifecycle
+
 ## MVP non-goals
 
 Cloud accounts, collaboration, marketplace, browser extensions, remote control, non-Windows platforms, arbitrary shell execution, and providers beyond the current allowlisted set remain out of scope.

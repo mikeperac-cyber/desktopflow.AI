@@ -7,10 +7,13 @@ import {
   createActionPlan,
   emergencyStop,
   executeActionPlan,
+  getRecordingStatus,
   hideWindow,
   loadRuntimeStatus,
   loadSettings,
   setOverlayPlanMode,
+  startRecording,
+  stopRecording,
   toUserMessage,
 } from "../services/desktop";
 import {
@@ -19,9 +22,10 @@ import {
   type ExecutionReport,
   type PlanningModel,
   type PlanningResult,
+  type RecordingStatus,
 } from "../types/settings";
 
-type OverlayState = "idle" | "paused" | "planning" | "planned" | "executing" | "executed" | "error";
+type OverlayState = "idle" | "paused" | "planning" | "planned" | "executing" | "executed" | "error" | "recording";
 
 export function Spotlight() {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -41,14 +45,20 @@ export function Spotlight() {
   const [execution, setExecution] = useState<ExecutionReport | null>(null);
   const [executionError, setExecutionError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [recording, setRecording] = useState<RecordingStatus | null>(null);
 
   useEffect(() => {
-    void Promise.all([loadSettings(), loadRuntimeStatus()]).then(([loadedSettings, runtime]) => {
+    void Promise.all([loadSettings(), loadRuntimeStatus(), getRecordingStatus()]).then(([loadedSettings, runtime, recordingStatus]) => {
       setSettings(loadedSettings);
       applyTheme(loadedSettings.theme);
       setModel(loadedSettings.ai_model);
       setIncludeScreenshot(loadedSettings.screenshot_transmission);
-      setState(runtime.paused ? "paused" : "idle");
+      if (recordingStatus?.recording) {
+        setRecording(recordingStatus);
+        setState("recording");
+      } else {
+        setState(runtime.paused ? "paused" : "idle");
+      }
       const targetName = runtime.active_target?.process_name || runtime.active_target?.title;
       setContextStatus(
         targetName
@@ -129,6 +139,52 @@ export function Spotlight() {
     }
   }
 
+  async function handleStartRecording() {
+    if (state !== "idle") return;
+    setError(null);
+    try {
+      const status = await startRecording();
+      setRecording(status);
+      setState("recording");
+      await hideWindow("overlay");
+    } catch (recordError: unknown) {
+      setError(toUserMessage(recordError));
+      setState("error");
+    }
+  }
+
+  async function handleStopRecording() {
+    setError(null);
+    try {
+      const result = await stopRecording();
+      setRecording(null);
+      setPlan(result);
+      await setOverlayPlanMode(true);
+      setState("planned");
+    } catch (recordError: unknown) {
+      setRecording(null);
+      setError(toUserMessage(recordError));
+      setState("error");
+    }
+  }
+
+  useEffect(() => {
+    if (state !== "recording") return;
+    const timer = window.setInterval(() => {
+      void getRecordingStatus()
+        .then((status) => {
+          if (status?.recording) {
+            setRecording(status);
+          } else {
+            setRecording(null);
+            setState("idle");
+          }
+        })
+        .catch(() => undefined);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [state]);
+
   const status = {
     idle: contextStatus,
     paused: "Paused · Resume automation from the tray",
@@ -146,6 +202,9 @@ export function Spotlight() {
             ? "Emergency stopped · Synthetic inputs released"
             : "Execution stopped safely",
     error: error ?? "Planning failed",
+    recording: recording
+      ? `Recording · ${recording.target_title} · ${recording.event_count} actions`
+      : "Recording",
   }[state];
 
   return (
@@ -165,7 +224,7 @@ export function Spotlight() {
           ref={inputRef}
           id="deskflow-command"
           className="command-input"
-          disabled={state === "planning" || state === "executing"}
+          disabled={state === "planning" || state === "executing" || state === "recording"}
           value={instruction}
           onChange={(event) => {
             setInstruction(event.currentTarget.value);
@@ -178,7 +237,7 @@ export function Spotlight() {
               void setOverlayPlanMode(false);
             }
           }}
-          placeholder="Ask DeskFlow what to do..."
+          placeholder={state === "recording" ? "Recording your actions…" : "Ask DeskFlow what to do..."}
           spellCheck="true"
           autoComplete="off"
         />
@@ -191,9 +250,28 @@ export function Spotlight() {
         </div>
         <div className="key-hints" aria-label="Keyboard shortcuts">
           <span><kbd>Enter</kbd> Plan</span>
+          {state === "idle" ? (
+            <button className="button button--secondary" onClick={() => void handleStartRecording()} type="button">
+              Record
+            </button>
+          ) : null}
           <span><kbd>Esc</kbd> {state === "executing" ? "Emergency Stop" : "Close"}</span>
         </div>
       </div>
+
+      {state === "recording" ? (
+        <div className="overlay-status-row" aria-live="polite">
+          <div className="status-copy">
+            <span className="status-dot status-dot--recording" />
+            <span>Interact with {recording?.target_title ?? "the target"}, then stop here to review the plan.</span>
+          </div>
+          <div className="key-hints" aria-label="Recording controls">
+            <button className="button button--secondary" onClick={() => void handleStopRecording()} type="button">
+              Stop ({recording?.event_count ?? 0})
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {plan ? (
         <PlanInspector

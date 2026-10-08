@@ -286,6 +286,14 @@ export interface ProviderCatalog {
   providers: ProviderStatus[];
 }
 
+export interface RecordingStatus {
+  recording: boolean;
+  event_count: number;
+  skipped_count: number;
+  elapsed_ms: number;
+  target_title: string;
+}
+
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: "system",
   global_hotkey: "Alt+Space",

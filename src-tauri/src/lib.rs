@@ -6,6 +6,7 @@ mod error;
 pub mod executor;
 mod highlight;
 mod hotkeys;
+pub mod recorder;
 pub mod runtime;
 pub mod security;
 pub mod settings;
@@ -78,6 +79,9 @@ pub fn run() {
             commands::highlight_ui_element,
             commands::clear_target_highlight,
             commands::create_action_plan,
+            commands::get_recording_status,
+            commands::start_recording,
+            commands::stop_recording,
             commands::execute_action_plan,
             commands::set_overlay_plan_mode,
             commands::update_app_settings,

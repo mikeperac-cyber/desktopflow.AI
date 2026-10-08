@@ -11,6 +11,7 @@ use crate::{
     executor::{self, ExecutionReport},
     highlight::{self, TargetHighlight},
     hotkeys,
+    recorder::{self, RecordingStatus},
     runtime::{RuntimeState, RuntimeStatus},
     settings::{self, AppSettings},
     uia::{self, UiAutomationSnapshot},
@@ -239,6 +240,115 @@ pub async fn create_action_plan(
 }
 
 #[tauri::command]
+pub async fn get_recording_status(
+    state: State<'_, RuntimeState>,
+) -> AppResult<Option<RecordingStatus>> {
+    Ok(state.recording_status())
+}
+
+#[tauri::command]
+pub async fn start_recording(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+) -> AppResult<RecordingStatus> {
+    if state.status().paused {
+        return Err(AppError::ExecutionPolicy(
+            "DeskFlow is paused. Resume it from the tray before recording.".to_string(),
+        ));
+    }
+    if state.status().executing {
+        return Err(AppError::ExecutionPolicy(
+            "a plan is currently executing. Recording starts only when idle.".to_string(),
+        ));
+    }
+    if state.recording_status().is_some() {
+        return Err(AppError::ExecutionPolicy(
+            "a recording is already in progress.".to_string(),
+        ));
+    }
+    let context = state.window_context().ok_or_else(|| {
+        AppError::InvalidPlan(
+            "Capture a target first: open the overlay on the application you want to record."
+                .to_string(),
+        )
+    })?;
+    let automation = state.ui_automation().ok_or_else(|| {
+        AppError::InvalidPlan(
+            "Inspect the captured target first in Advanced settings, then start recording."
+                .to_string(),
+        )
+    })?;
+    if context.process.id != automation.target.process_id {
+        return Err(AppError::InvalidPlan(
+            "The captured window and UI tree no longer identify the same process. Capture the target again."
+                .to_string(),
+        ));
+    }
+    let recording = recorder::ActiveRecording::begin(&context, &automation)?;
+    let status = recording.status();
+    if !state.begin_recording(recording) {
+        return Err(AppError::ExecutionPolicy(
+            "a recording is already in progress.".to_string(),
+        ));
+    }
+    windows::hide_known_window(&app, "overlay")?;
+    state.log_diagnostic(
+        "info",
+        "recorder",
+        &format!("Started recording input on '{}'.", context.title),
+    );
+    Ok(status)
+}
+
+#[tauri::command]
+pub async fn stop_recording(
+    app: AppHandle,
+    state: State<'_, RuntimeState>,
+) -> AppResult<PlanningResult> {
+    let mut recording = state
+        .take_recording()
+        .ok_or_else(|| AppError::InvalidPlan("there is no recording in progress.".to_string()))?;
+    // The overlay recaptures on open; refuse to build a plan when the user
+    // wandered to a different window instead of failing opaquely at replay.
+    if let Some(current) = state.window_context()
+        && current.native_window_handle != recording.hwnd()
+    {
+        let _ = recording.shutdown();
+        return Err(AppError::InvalidPlan(format!(
+            "the recording targeted '{}', but the overlay now shows '{}'. Return to the recorded application and record again.",
+            recording.title(),
+            current.title
+        )));
+    }
+    let events = recording.shutdown()?;
+    let snapshot = recording.snapshot().clone();
+    let (plan, outcome) = recorder::build_plan(&snapshot, events)?;
+    let title = recording.title().to_string();
+    let result = recorder::build_result(&snapshot, plan);
+    // Restore the recording-time snapshot so the executor revalidates recorded
+    // targets by fingerprint against the interface that produced them.
+    state.set_ui_automation(snapshot);
+    state.set_action_plan(
+        PlanRequest {
+            instruction: format!("Recorded workflow on '{title}' ({} steps)", outcome.steps),
+            model: state.settings().ai_model,
+            include_screenshot: false,
+        },
+        result.clone(),
+    );
+    state.log_diagnostic(
+        "info",
+        "recorder",
+        &format!(
+            "Stopped recording on '{}': {} steps, {} ignored, {} redacted.",
+            title, outcome.steps, outcome.skipped, outcome.redacted
+        ),
+    );
+    windows::set_overlay_plan_mode(&app, true)?;
+    Ok(result)
+}
+
+#[tauri::command]
 pub async fn execute_action_plan(
     app: AppHandle,
     state: State<'_, RuntimeState>,
@@ -269,7 +379,15 @@ pub async fn execute_action_plan(
         let mut planning_result = state.action_plan().ok_or_else(|| {
             AppError::ExecutionPolicy("there is no current validated plan.".to_string())
         })?;
-        let provider_kind = AiProviderKind::from_id(&planning_result.provider)?;
+        // Recorded plans are validated observations, not provider output. They
+        // execute through the identical policy and revalidation gates; only
+        // recovery replanning needs a planning provider, which falls back to
+        // the user's currently selected one.
+        let provider_kind = if planning_result.provider == recorder::RECORDER_PROVIDER_ID {
+            state.settings().ai_provider
+        } else {
+            AiProviderKind::from_id(&planning_result.provider)?
+        };
         if request.provider_request_id.trim().is_empty()
             || request.provider_request_id != planning_result.provider_request_id
         {

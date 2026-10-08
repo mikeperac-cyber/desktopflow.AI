@@ -120,6 +120,17 @@ Automated tests use synthetic observations and mocked provider responses; they m
 
 The specific-HWND capture helper exists only for local developer probes and is not registered as a Tauri command. Production capture remains foreground-only.
 
+## Phase 14 recorder smoke gate
+
+1. Capture a safe target (blank Notepad) and inspect it in Advanced settings.
+2. Press `Alt + Space`, click **Record**, and confirm the overlay hides.
+3. Click a control, type a short word, press `Enter`, and scroll once — all inside the target.
+4. Press `Alt + Space` and confirm the overlay shows **Recording · 4+ actions** with a live count.
+5. Click **Stop** and confirm a validated recorded plan appears with `recorder-*` request ID, ready for the unchanged second confirmation.
+6. Never type real secrets during recording. If the target has a password field, type a fake value there and confirm the stopped plan reports dropped sensitive keystrokes with no corresponding step.
+7. Confirm clicking outside the target (e.g., the desktop) adds no steps.
+8. Confirm replay requires the same explicit confirmation and supports emergency stop.
+
 ## Release build
 
 ```powershell

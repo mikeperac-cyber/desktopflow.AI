@@ -8,6 +8,7 @@ use serde::Serialize;
 use crate::{
     ai::{PlanRequest, PlanningResult},
     context::{ActiveTargetSummary, WindowContextSnapshot},
+    recorder::{ActiveRecording, RecordingStatus},
     settings::AppSettings,
     uia::UiAutomationSnapshot,
 };
@@ -33,6 +34,7 @@ pub struct RuntimeState {
     ui_automation: Mutex<Option<UiAutomationSnapshot>>,
     plan_request: Mutex<Option<PlanRequest>>,
     action_plan: Mutex<Option<PlanningResult>>,
+    recording: Mutex<Option<ActiveRecording>>,
     paused: AtomicBool,
     executing: AtomicBool,
     emergency_stop_requested: std::sync::Arc<AtomicBool>,
@@ -50,6 +52,7 @@ impl Default for RuntimeState {
             ui_automation: Mutex::new(None),
             plan_request: Mutex::new(None),
             action_plan: Mutex::new(None),
+            recording: Mutex::new(None),
             paused: AtomicBool::new(false),
             executing: AtomicBool::new(false),
             emergency_stop_requested: std::sync::Arc::new(AtomicBool::new(false)),
@@ -132,6 +135,26 @@ impl RuntimeState {
         recover_lock(&self.action_plan).clone()
     }
 
+    /// Stores an active recording. Returns false when one is already running.
+    pub fn begin_recording(&self, recording: ActiveRecording) -> bool {
+        let mut slot = recover_lock(&self.recording);
+        if slot.is_some() {
+            return false;
+        }
+        *slot = Some(recording);
+        true
+    }
+
+    pub fn take_recording(&self) -> Option<ActiveRecording> {
+        recover_lock(&self.recording).take()
+    }
+
+    pub fn recording_status(&self) -> Option<RecordingStatus> {
+        recover_lock(&self.recording)
+            .as_ref()
+            .map(|recording| recording.status())
+    }
+
     pub fn plan_request(&self) -> Option<PlanRequest> {
         recover_lock(&self.plan_request).clone()
     }
@@ -207,6 +230,8 @@ impl RuntimeState {
         *recover_lock(&self.ui_automation) = None;
         *recover_lock(&self.plan_request) = None;
         *recover_lock(&self.action_plan) = None;
+        // Dropping the recording releases its hooks; unreviewed input is never kept.
+        recover_lock(&self.recording).take();
     }
 
     pub fn log_diagnostic(&self, level: &str, category: &str, message: &str) {

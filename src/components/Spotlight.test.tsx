@@ -7,10 +7,13 @@ import {
   createActionPlan,
   emergencyStop,
   executeActionPlan,
+  getRecordingStatus,
   hideWindow,
   loadRuntimeStatus,
   loadSettings,
   setOverlayPlanMode,
+  startRecording,
+  stopRecording,
 } from "../services/desktop";
 import { Spotlight } from "./Spotlight";
 
@@ -19,10 +22,13 @@ vi.mock("../services/desktop", () => ({
   emergencyStop: vi.fn().mockResolvedValue(true),
   cancelExecution: vi.fn().mockResolvedValue(true),
   executeActionPlan: vi.fn(),
+  getRecordingStatus: vi.fn(),
   hideWindow: vi.fn().mockResolvedValue(undefined),
   loadRuntimeStatus: vi.fn(),
   loadSettings: vi.fn(),
   setOverlayPlanMode: vi.fn().mockResolvedValue(undefined),
+  startRecording: vi.fn(),
+  stopRecording: vi.fn(),
   toUserMessage: (error: unknown) => String(error),
 }));
 
@@ -99,6 +105,7 @@ describe("Spotlight", () => {
   beforeEach(() => {
     vi.mocked(loadSettings).mockResolvedValue({ ...DEFAULT_SETTINGS });
     vi.mocked(loadRuntimeStatus).mockResolvedValue({ ...DEFAULT_RUNTIME_STATUS });
+    vi.mocked(getRecordingStatus).mockResolvedValue(null);
     vi.mocked(createActionPlan).mockResolvedValue(planningResult);
     vi.mocked(executeActionPlan).mockResolvedValue({
       started_at_unix_ms: 2,
@@ -215,5 +222,46 @@ describe("Spotlight", () => {
     await user.keyboard("{Escape}");
     expect(hideWindow).toHaveBeenCalledWith("overlay");
     expect(emergencyStop).not.toHaveBeenCalled();
+  });
+
+  it("starts a recording from the overlay and hides it", async () => {
+    const user = userEvent.setup();
+    vi.mocked(startRecording).mockResolvedValue({
+      recording: true,
+      event_count: 0,
+      skipped_count: 0,
+      elapsed_ms: 10,
+      target_title: "Untitled - Notepad",
+    });
+    render(<Spotlight />);
+
+    await user.click(await screen.findByRole("button", { name: "Record" }));
+    expect(startRecording).toHaveBeenCalledOnce();
+    expect(hideWindow).toHaveBeenCalledWith("overlay");
+    expect(await screen.findByRole("button", { name: "Stop (0)" })).toBeInTheDocument();
+  });
+
+  it("restores an in-progress recording on open and stops it into a plan", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getRecordingStatus).mockResolvedValue({
+      recording: true,
+      event_count: 3,
+      skipped_count: 0,
+      elapsed_ms: 5000,
+      target_title: "Untitled - Notepad",
+    });
+    vi.mocked(stopRecording).mockResolvedValue({
+      ...planningResult,
+      provider: "recorder",
+      model: "observed-actions",
+      provider_request_id: "recorder-1-0",
+    });
+    render(<Spotlight />);
+
+    expect(await screen.findByRole("button", { name: "Stop (3)" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Stop (3)" }));
+    expect(stopRecording).toHaveBeenCalledOnce();
+    expect(setOverlayPlanMode).toHaveBeenCalledWith(true);
+    expect(await screen.findByText("Open settings", { selector: "h2" })).toBeInTheDocument();
   });
 });

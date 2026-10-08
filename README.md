@@ -30,6 +30,7 @@ The product is uncompromisingly safe: AI output is untrusted and bounded to an a
 - per-provider Windows Credential Manager storage with environment-variable fallback and no secret material in settings, localStorage, logs, or Git
 - strict structured action schema, current-target ID validation, password-name redaction, bounded payloads, and token usage reporting
 - command-overlay and AI-settings plan inspection with two-stage execution confirmation and local step reports
+- one-click action recorder: observed clicks, typing, shortcuts, and scrolling on the captured target compile to the same validated plan shape; sensitive keystrokes are never stored
 - UIA-first executor with bounded input fallback, stale/ambiguous target rejection, and stop-on-first-failure behavior
 - typed post-action verification, fresh-state recovery planning, a two-replan ceiling, and a total action budget across attempts
 - ESLint, TypeScript, Vitest/Testing Library, and Rust adapter/unit-test gates

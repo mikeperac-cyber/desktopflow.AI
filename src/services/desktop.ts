@@ -8,6 +8,7 @@ import {
   type CommandError,
   type DiagnosticLogEntry,
   type ExecutionReport,
+  type RecordingStatus,
   type RuntimeStatus,
   type PlanningModel,
   type PlanningResult,
@@ -301,6 +302,33 @@ export async function executeActionPlan(
   throw {
     code: "desktop_required",
     message: "Plan execution is available only in the DeskFlow desktop app.",
+  } satisfies CommandError;
+}
+
+export async function getRecordingStatus(): Promise<RecordingStatus | null> {
+  if (isTauri()) {
+    return invoke<RecordingStatus | null>("get_recording_status");
+  }
+  return null;
+}
+
+export async function startRecording(): Promise<RecordingStatus> {
+  if (isTauri()) {
+    return invoke<RecordingStatus>("start_recording");
+  }
+  throw {
+    code: "desktop_required",
+    message: "Action recording is available in the DeskFlow desktop app.",
+  } satisfies CommandError;
+}
+
+export async function stopRecording(): Promise<PlanningResult> {
+  if (isTauri()) {
+    return invoke<PlanningResult>("stop_recording");
+  }
+  throw {
+    code: "desktop_required",
+    message: "Action recording is available in the DeskFlow desktop app.",
   } satisfies CommandError;
 }
 
