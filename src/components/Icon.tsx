@@ -6,6 +6,7 @@ type IconName =
   | "camera"
   | "check"
   | "chevron"
+  | "clock"
   | "close"
   | "general"
   | "privacy"
@@ -48,6 +49,12 @@ export function Icon({ name, size = 20, ...props }: IconProps) {
       <>
         <path d="M4 7.5h3l1.4-2h7.2l1.4 2h3v11H4z" />
         <circle cx="12" cy="13" r="3.2" />
+      </>
+    ),
+    clock: (
+      <>
+        <circle cx="12" cy="12" r="8.5" />
+        <path d="M12 7.5V12l3 2" />
       </>
     ),
     privacy: <path d="M12 3 5 6v5c0 4.6 2.9 8 7 10 4.1-2 7-5.4 7-10V6l-7-3Z" />,

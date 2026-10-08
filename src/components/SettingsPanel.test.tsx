@@ -16,6 +16,7 @@ import {
   loadLastUiAutomation,
   loadLastWindowContext,
   loadRuntimeStatus,
+  loadScheduleRuns,
   loadSettings,
   saveAiProviderCredential,
   saveSettings,
@@ -48,6 +49,7 @@ vi.mock("../services/desktop", () => ({
   loadLastUiAutomation: vi.fn(),
   loadLastWindowContext: vi.fn(),
   loadRuntimeStatus: vi.fn(),
+  loadScheduleRuns: vi.fn(),
   loadSettings: vi.fn(),
   saveAiProviderCredential: vi.fn(),
   saveSettings: vi.fn(),
@@ -143,6 +145,7 @@ describe("SettingsPanel", () => {
   beforeEach(() => {
     vi.mocked(loadSettings).mockResolvedValue({ ...DEFAULT_SETTINGS });
     vi.mocked(loadRuntimeStatus).mockResolvedValue({ ...DEFAULT_RUNTIME_STATUS });
+    vi.mocked(loadScheduleRuns).mockResolvedValue([]);
     vi.mocked(loadLastWindowContext).mockResolvedValue(null);
     vi.mocked(loadLastUiAutomation).mockResolvedValue(null);
     vi.mocked(loadLastActionPlan).mockResolvedValue(null);
@@ -343,6 +346,43 @@ describe("SettingsPanel", () => {
     expect(screen.queryByText("My recipe")).not.toBeInTheDocument();
   });
 
+  it("arms a daily schedule and pauses it again", async () => {
+    const user = userEvent.setup();
+    render(<SettingsPanel />);
+
+    await user.click(await screen.findByRole("button", { name: "Schedules" }));
+    expect(await screen.findByRole("heading", { name: "Scheduled workflows" })).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Name"), "Morning downloads");
+    await user.type(
+      screen.getByLabelText("Instruction"),
+      "Open the Downloads folder and sort by Date modified, newest first.",
+    );
+    await user.click(screen.getByRole("button", { name: "Arm schedule" }));
+
+    expect(await screen.findByText("Morning downloads")).toBeInTheDocument();
+    expect(screen.getByText(/Daily · 09:00/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Pause" }));
+    expect(await screen.findByRole("button", { name: "Arm" })).toBeInTheDocument();
+  });
+
+  it("creates a file-arrival schedule from a recipe", async () => {
+    const user = userEvent.setup();
+    render(<SettingsPanel />);
+
+    await user.click(await screen.findByRole("button", { name: "Schedules" }));
+    await user.click(screen.getByRole("radio", { name: "File appears" }));
+    await user.type(screen.getByLabelText("Name"), "Invoice watch");
+    await user.selectOptions(screen.getByLabelText("Start from a recipe"), "built-in:explorer-sort-downloads");
+    await user.clear(screen.getByLabelText("Watched folder"));
+    await user.type(screen.getByLabelText("Watched folder"), "C:\\Temp");
+    await user.click(screen.getByRole("button", { name: "Arm schedule" }));
+
+    expect(await screen.findByText("Invoice watch")).toBeInTheDocument();
+    expect(screen.getByText(/When '.*' appears in C:\\Temp/)).toBeInTheDocument();
+  });
+
   it("captures and displays foreground window diagnostics", async () => {
     const user = userEvent.setup();
     render(<SettingsPanel />);
@@ -470,6 +510,11 @@ describe("SettingsPanel", () => {
     const aiBtn = screen.getByRole("button", { name: "AI" });
     expect(aiBtn).toHaveAttribute("aria-current", "page");
     expect(aiBtn).toHaveFocus();
+
+    await user.keyboard("{ArrowDown}");
+    const schedBtn = screen.getByRole("button", { name: "Schedules" });
+    expect(schedBtn).toHaveAttribute("aria-current", "page");
+    expect(schedBtn).toHaveFocus();
 
     await user.keyboard("{ArrowDown}");
     const autoBtn = screen.getByRole("button", { name: "Automation" });

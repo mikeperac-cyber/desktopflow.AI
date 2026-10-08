@@ -26,6 +26,7 @@ export interface AppSettings {
   diagnostic_logging: boolean;
   developer_mode: boolean;
   saved_workflows: SavedWorkflow[];
+  schedules: ScheduledWorkflow[];
 }
 
 export interface RuntimeStatus {
@@ -294,6 +295,31 @@ export interface SavedWorkflow {
   created_at_unix_ms: number;
 }
 
+export type ScheduleTrigger =
+  | { kind: "once"; at_unix_ms: number }
+  | { kind: "daily"; hour: number; minute: number }
+  | { kind: "weekly"; weekdays: number; hour: number; minute: number }
+  | { kind: "file_appears"; folder: string; pattern: string };
+
+export interface ScheduledWorkflow {
+  id: string;
+  name: string;
+  instruction: string;
+  trigger: ScheduleTrigger;
+  autonomous: boolean;
+  enabled: boolean;
+  expected_process: string | null;
+  created_at_unix_ms: number;
+}
+
+export interface ScheduleRun {
+  schedule_id: string;
+  schedule_name: string;
+  fired_at_unix_ms: number;
+  outcome: string;
+  detail: string;
+}
+
 export interface RecordingStatus {
   recording: boolean;
   event_count: number;
@@ -317,6 +343,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   diagnostic_logging: false,
   developer_mode: false,
   saved_workflows: [],
+  schedules: [],
 };
 
 export const DEFAULT_RUNTIME_STATUS: RuntimeStatus = {

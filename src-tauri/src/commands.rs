@@ -20,13 +20,13 @@ use crate::{
 
 #[derive(Debug, Deserialize)]
 pub struct ExecutePlanRequest {
-    provider_request_id: String,
-    surface: String,
-    confirmed: bool,
+    pub(crate) provider_request_id: String,
+    pub(crate) surface: String,
+    pub(crate) confirmed: bool,
     #[serde(default)]
-    approved_step_ids: Vec<String>,
+    pub(crate) approved_step_ids: Vec<String>,
     #[serde(default)]
-    custom_max_steps: Option<u16>,
+    pub(crate) custom_max_steps: Option<u16>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -244,6 +244,13 @@ pub async fn get_recording_status(
     state: State<'_, RuntimeState>,
 ) -> AppResult<Option<RecordingStatus>> {
     Ok(state.recording_status())
+}
+
+#[tauri::command]
+pub fn get_schedule_runs(state: State<'_, RuntimeState>) -> Vec<crate::scheduler::ScheduleRun> {
+    let mut runs = state.schedule_runs();
+    runs.reverse();
+    runs
 }
 
 #[tauri::command]

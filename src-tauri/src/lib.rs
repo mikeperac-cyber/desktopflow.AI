@@ -8,6 +8,7 @@ mod highlight;
 mod hotkeys;
 pub mod recorder;
 pub mod runtime;
+pub mod scheduler;
 pub mod security;
 pub mod settings;
 mod tray;
@@ -51,6 +52,10 @@ pub fn run() {
 
             tray::install(app)?;
             highlight::initialize(app.handle())?;
+            let scheduler_app = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                crate::scheduler::run_loop(scheduler_app).await;
+            });
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -80,6 +85,7 @@ pub fn run() {
             commands::clear_target_highlight,
             commands::create_action_plan,
             commands::get_recording_status,
+            commands::get_schedule_runs,
             commands::start_recording,
             commands::stop_recording,
             commands::execute_action_plan,

@@ -9,6 +9,7 @@ use crate::{
     ai::{PlanRequest, PlanningResult},
     context::{ActiveTargetSummary, WindowContextSnapshot},
     recorder::{ActiveRecording, RecordingStatus},
+    scheduler::{ScheduleMark, ScheduleRun},
     settings::AppSettings,
     uia::UiAutomationSnapshot,
 };
@@ -35,6 +36,8 @@ pub struct RuntimeState {
     plan_request: Mutex<Option<PlanRequest>>,
     action_plan: Mutex<Option<PlanningResult>>,
     recording: Mutex<Option<ActiveRecording>>,
+    schedule_runs: Mutex<Vec<ScheduleRun>>,
+    schedule_marks: Mutex<std::collections::HashMap<String, ScheduleMark>>,
     paused: AtomicBool,
     executing: AtomicBool,
     emergency_stop_requested: std::sync::Arc<AtomicBool>,
@@ -53,6 +56,8 @@ impl Default for RuntimeState {
             plan_request: Mutex::new(None),
             action_plan: Mutex::new(None),
             recording: Mutex::new(None),
+            schedule_runs: Mutex::new(Vec::new()),
+            schedule_marks: Mutex::new(std::collections::HashMap::new()),
             paused: AtomicBool::new(false),
             executing: AtomicBool::new(false),
             emergency_stop_requested: std::sync::Arc::new(AtomicBool::new(false)),
@@ -153,6 +158,47 @@ impl RuntimeState {
         recover_lock(&self.recording)
             .as_ref()
             .map(|recording| recording.status())
+    }
+
+    pub fn push_schedule_run(&self, run: ScheduleRun) {
+        let mut runs = recover_lock(&self.schedule_runs);
+        runs.push(run);
+        while runs.len() > crate::scheduler::MAX_RUN_HISTORY {
+            runs.remove(0);
+        }
+    }
+
+    pub fn schedule_runs(&self) -> Vec<ScheduleRun> {
+        recover_lock(&self.schedule_runs).clone()
+    }
+
+    pub fn schedule_marks_lock(
+        &self,
+    ) -> MutexGuard<'_, std::collections::HashMap<String, ScheduleMark>> {
+        recover_lock(&self.schedule_marks)
+    }
+
+    pub fn set_schedule_slot(&self, schedule_id: &str, slot_ms: u64) {
+        let mut marks = recover_lock(&self.schedule_marks);
+        let entry = marks.entry(schedule_id.to_string()).or_default();
+        entry.slot_ms = entry.slot_ms.max(slot_ms);
+    }
+
+    /// Previous file-arrival baseline, if the watcher has seeded one.
+    /// Pre-existing files never fire: only the first sighting seeds.
+    pub fn file_baseline(&self, schedule_id: &str) -> Option<std::collections::HashSet<String>> {
+        recover_lock(&self.schedule_marks)
+            .get(schedule_id)
+            .and_then(|mark| mark.seen_files.clone())
+    }
+
+    pub fn set_file_baseline(&self, schedule_id: &str, current: std::collections::HashSet<String>) {
+        let mut marks = recover_lock(&self.schedule_marks);
+        let mark = marks.entry(schedule_id.to_string()).or_default();
+        mark.seen_files = Some(current);
+        if mark.last_outcome.is_none() {
+            mark.last_outcome = None;
+        }
     }
 
     pub fn plan_request(&self) -> Option<PlanRequest> {

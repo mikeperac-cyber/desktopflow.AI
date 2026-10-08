@@ -10,6 +10,7 @@ import {
   type ExecutionReport,
   type RecordingStatus,
   type RuntimeStatus,
+  type ScheduleRun,
   type PlanningModel,
   type PlanningResult,
   type ProviderCatalog,
@@ -310,6 +311,13 @@ export async function getRecordingStatus(): Promise<RecordingStatus | null> {
     return invoke<RecordingStatus | null>("get_recording_status");
   }
   return null;
+}
+
+export async function loadScheduleRuns(): Promise<ScheduleRun[]> {
+  if (isTauri()) {
+    return invoke<ScheduleRun[]>("get_schedule_runs");
+  }
+  return [];
 }
 
 export async function startRecording(): Promise<RecordingStatus> {

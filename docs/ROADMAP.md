@@ -198,6 +198,18 @@ Outcome: 20 curated recipes plus user-saved instructions, all running through th
 - [x] user workflows persisted in local settings (50 max, bounded lengths, unique IDs, Rust-validated)
 - [x] settings and UI tests for validation, fill, save, and delete
 
+## Phase 16 — Scheduler and triggers (implemented)
+
+Outcome: saved instructions run on time or on file arrival through the unchanged planning pipeline. Attended schedules open a validated plan for confirmation; autonomous schedules run only low-risk plans inside the action budget, and anything riskier is downgraded to attended.
+
+- [x] once, daily, weekly, and file-appearance triggers with validated bounded settings
+- [x] 30-second background tick with startup grace, 30-minute late window, and missed-slot consumption
+- [x] runs never start while paused, executing, recording, or while a plan awaits review
+- [x] expected-process gating with explicit skip outcomes; file watcher reads names only
+- [x] one-time schedules auto-disable after firing; run history with deduped outcomes
+- [x] Schedules settings section with run history, arm/pause, and delete
+- [x] unit tests for slot math, glob matching, and settings validation plus UI tests
+
 ## MVP non-goals
 
 Cloud accounts, collaboration, marketplace, browser extensions, remote control, non-Windows platforms, arbitrary shell execution, and providers beyond the current allowlisted set remain out of scope.

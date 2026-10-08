@@ -2,6 +2,7 @@ import { type FormEvent, type KeyboardEvent, useEffect, useMemo, useState } from
 
 import { Icon } from "./Icon";
 import { AiSettings } from "./AiSettings";
+import { SchedulesSection } from "./SchedulesSection";
 import { ContextInspector } from "./ContextInspector";
 import { WindowChrome } from "./WindowChrome";
 import { applyTheme, validateShortcut } from "../lib/theme";
@@ -33,11 +34,12 @@ import {
   type WindowContextSnapshot,
 } from "../types/settings";
 
-type SectionId = "general" | "ai" | "automation" | "privacy" | "advanced";
+type SectionId = "general" | "ai" | "schedules" | "automation" | "privacy" | "advanced";
 
 const sections: Array<{ id: SectionId; label: string; icon: Parameters<typeof Icon>[0]["name"] }> = [
   { id: "general", label: "General", icon: "general" },
   { id: "ai", label: "AI", icon: "ai" },
+  { id: "schedules", label: "Schedules", icon: "clock" },
   { id: "automation", label: "Automation", icon: "automation" },
   { id: "privacy", label: "Privacy", icon: "privacy" },
   { id: "advanced", label: "Advanced", icon: "sliders" },
@@ -588,6 +590,26 @@ export function SettingsPanel() {
                     saved_workflows: draft.saved_workflows.filter((workflow) => workflow.id !== id),
                   })
                 }
+              />
+            ) : activeSection === "schedules" ? (
+              <SchedulesSection
+                onAdd={(schedule) =>
+                  updateDraft({ schedules: [...draft.schedules, schedule] })
+                }
+                onDelete={(id) =>
+                  updateDraft({
+                    schedules: draft.schedules.filter((schedule) => schedule.id !== id),
+                  })
+                }
+                onToggle={(id, enabled) =>
+                  updateDraft({
+                    schedules: draft.schedules.map((schedule) =>
+                      schedule.id === id ? { ...schedule, enabled } : schedule,
+                    ),
+                  })
+                }
+                savedWorkflows={draft.saved_workflows}
+                schedules={draft.schedules}
               />
             ) : activeSection === "automation" ? (
               <AutomationSettings draft={draft} onChange={updateDraft} />

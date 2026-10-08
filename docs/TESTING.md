@@ -139,6 +139,15 @@ The specific-HWND capture helper exists only for local developer probes and is n
 4. Run a recipe end to end on its hinted app and confirm the plan still requires the second confirmation.
 5. Delete the saved recipe, save settings, and confirm it disappears and stays gone after reopen.
 
+## Phase 16 scheduler smoke gate
+
+1. In **Settings → Schedules**, arm an attended once-schedule two minutes out for a safe recipe with the target app in the foreground.
+2. Confirm the overlay opens with a validated plan and nothing executes before confirmation.
+3. Arm an autonomous daily schedule for a low-risk recipe and confirm it runs alone with a `ran_autonomous` entry in run history.
+4. Arm an autonomous schedule whose plan is not low-risk and confirm it downgrades to attended instead of running.
+5. Create a file-appearance schedule on an empty temp folder, drop in a matching file, and confirm it fires once — pre-existing files must never fire.
+6. Confirm no run starts while paused, while a recording runs, or while another plan awaits review.
+
 ## Release build
 
 ```powershell
