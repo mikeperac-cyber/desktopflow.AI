@@ -141,13 +141,13 @@ describe("Spotlight", () => {
     const user = userEvent.setup();
     render(<Spotlight />);
 
-    const input = await screen.findByPlaceholderText("Ask DeskFlow what to do...");
+    const input = await screen.findByPlaceholderText("What would you like to get done?");
     expect(input).toHaveFocus();
     await user.type(input, "Open settings{enter}");
 
     expect(await screen.findByText("Open settings", { selector: "h2" })).toBeInTheDocument();
     expect(screen.getByText(/Awaiting confirmation/)).toBeInTheDocument();
-    expect(screen.getByText(/Review before running/)).toBeInTheDocument();
+    expect(screen.getByText(/Your plan is ready · Review it before anything runs/)).toBeInTheDocument();
     expect(createActionPlan).toHaveBeenCalledWith("Open settings", "fast", false);
     expect(setOverlayPlanMode).toHaveBeenCalledWith(true);
 
@@ -164,7 +164,7 @@ describe("Spotlight", () => {
     vi.mocked(createActionPlan).mockResolvedValue(highRiskPlanningResult);
     render(<Spotlight />);
 
-    const input = await screen.findByPlaceholderText("Ask DeskFlow what to do...");
+    const input = await screen.findByPlaceholderText("What would you like to get done?");
     await user.type(input, "Delete file{enter}");
 
     expect(await screen.findByText("Delete file", { selector: "h2" })).toBeInTheDocument();
@@ -205,13 +205,13 @@ describe("Spotlight", () => {
     });
     render(<Spotlight />);
 
-    const input = await screen.findByPlaceholderText("Ask DeskFlow what to do...");
+    const input = await screen.findByPlaceholderText("What would you like to get done?");
     await user.type(input, "Open settings{enter}");
 
     await user.click(await screen.findByRole("button", { name: "Review and run plan" }));
     await user.click(screen.getByRole("button", { name: "Confirm & run 1 step" }));
 
-    expect(await screen.findByText("Emergency stopped · Synthetic inputs released")).toBeInTheDocument();
+    expect(await screen.findByText("Emergency stop · Inputs released")).toBeInTheDocument();
     expect(screen.getByText(/Emergency stop triggered · Released inputs after 0 verified actions/)).toBeInTheDocument();
   });
 

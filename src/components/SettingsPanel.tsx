@@ -71,7 +71,7 @@ function GeneralSettings({
   shortcutError: string | null;
 }) {
   const themes: Array<{ value: ThemePreference; label: string }> = [
-    { value: "system", label: "System" },
+    { value: "system", label: "Automatic" },
     { value: "light", label: "Light" },
     { value: "dark", label: "Dark" },
   ];
@@ -80,6 +80,7 @@ function GeneralSettings({
     <div className="settings-content-section">
       <section className="settings-group" aria-labelledby="appearance-heading">
         <h2 id="appearance-heading">Appearance</h2>
+        <p className="settings-group-description">Choose a look that feels comfortable. Automatic follows your Windows setting.</p>
         <div className="theme-options" role="radiogroup" aria-label="Theme">
           {themes.map((theme) => (
             <label key={theme.value} className="radio-option">
@@ -93,7 +94,10 @@ function GeneralSettings({
                 type="radio"
               />
               <span className="radio-control" />
-              {theme.label}
+              <span className="theme-option-copy">
+                <strong>{theme.label}</strong>
+                <small>{theme.value === "system" ? "Match Windows" : theme.value === "light" ? "Bright and clear" : "Easy on the eyes"}</small>
+              </span>
             </label>
           ))}
         </div>

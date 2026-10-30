@@ -201,6 +201,20 @@ describe("SettingsPanel", () => {
     vi.mocked(inspectTargetUi).mockResolvedValue(inspectedUi);
   });
 
+  it("uses Windows-matching automatic appearance and lets the user choose a theme", async () => {
+    const user = userEvent.setup();
+    render(<SettingsPanel />);
+
+    const automatic = await screen.findByRole("radio", { name: /Automatic/ });
+    expect(automatic).toBeChecked();
+    expect(screen.getByText("Choose a look that feels comfortable. Automatic follows your Windows setting.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("radio", { name: /Dark/ }));
+    expect(screen.getByRole("radio", { name: /Dark/ })).toBeChecked();
+    await user.click(screen.getByRole("button", { name: "Save settings" }));
+    expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ theme: "dark" }));
+  });
+
   it("edits and saves the global shortcut", async () => {
     const user = userEvent.setup();
     render(<SettingsPanel />);

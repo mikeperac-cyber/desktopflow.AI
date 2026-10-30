@@ -38,7 +38,7 @@ export function Spotlight() {
   }, [state]);
 
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
-  const [contextStatus, setContextStatus] = useState("Ready · No target captured");
+  const [contextStatus, setContextStatus] = useState("Ready when you are · Choose an app to get started");
   const [model, setModel] = useState<PlanningModel>("fast");
   const [includeScreenshot, setIncludeScreenshot] = useState(false);
   const [plan, setPlan] = useState<PlanningResult | null>(null);
@@ -62,10 +62,10 @@ export function Spotlight() {
       const targetName = runtime.active_target?.process_name || runtime.active_target?.title;
       setContextStatus(
         targetName
-          ? `Ready · ${targetName}`
+          ? `Ready to help in ${targetName}`
           : runtime.context_warning
-            ? "Ready · Target capture unavailable"
-            : "Ready · No target captured",
+            ? "Couldn't select an app · Open DeskFlow again to retry"
+            : "Ready when you are · Choose an app to get started",
       );
       window.requestAnimationFrame(() => inputRef.current?.focus());
     });
@@ -187,21 +187,21 @@ export function Spotlight() {
 
   const status = {
     idle: contextStatus,
-    paused: "Paused · Resume automation from the tray",
-    planning: "Planning · Inspecting the target and validating provider output",
-    planned: "Plan validated · Review before running",
-    executing: "Running · Observing, acting, and verifying each result",
+    paused: "Automation is paused · Resume from the tray",
+    planning: "Putting a plan together · Checking the selected app",
+    planned: "Your plan is ready · Review it before anything runs",
+    executing: "Working · Checking each step as it runs",
     executed:
       execution?.status === "completed"
         ? execution.recovered
-          ? "Execution recovered and completed"
-          : "Execution verified"
+          ? "Done · Recovered and verified"
+          : "Done · Results verified"
         : execution?.status === "cancelled"
-          ? "Execution cancelled"
+          ? "Run cancelled"
           : execution?.status === "emergency_stopped"
-            ? "Emergency stopped · Synthetic inputs released"
-            : "Execution stopped safely",
-    error: error ?? "Planning failed",
+            ? "Emergency stop · Inputs released"
+            : "Stopped safely · No further actions were taken",
+    error: error ?? "Couldn't make a plan",
     recording: recording
       ? `Recording · ${recording.target_title} · ${recording.event_count} actions`
       : "Recording",
@@ -237,7 +237,7 @@ export function Spotlight() {
               void setOverlayPlanMode(false);
             }
           }}
-          placeholder={state === "recording" ? "Recording your actions…" : "Ask DeskFlow what to do..."}
+          placeholder={state === "recording" ? "Recording your actions…" : "What would you like to get done?"}
           spellCheck="true"
           autoComplete="off"
         />
