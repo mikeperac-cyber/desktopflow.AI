@@ -1,6 +1,6 @@
 # DeskFlow AI
 
-DeskFlow AI is a keyboard-first Windows workflow copilot built around local safety, deterministic execution, and privacy. This repository contains the complete implementation across **Phases 1–12**. The Tauri v2 application can identify, capture, inspect, and visually highlight accessible controls in a foreground Windows application, ask one selected provider for a typed plan, run a user-confirmed plan through a local Rust executor with granular approval policies and autonomous action budgets, verify every action, recover from a changed interface with bounded fresh-state replanning, and abort immediately upon global Emergency Stop (`Ctrl + Alt + Escape` or tray action).
+DeskFlow AI is a keyboard-first Windows workflow copilot built around local safety, deterministic execution, and privacy. This repository contains the complete implementation across **Phases 1–17**. The Tauri v2 application can identify, capture, inspect, and visually highlight accessible controls in a foreground Windows application, ask one selected provider for a typed plan, run a user-confirmed plan through a local Rust executor with granular approval policies and autonomous action budgets, verify every action, recover from a changed interface with bounded fresh-state replanning, and abort immediately upon global Emergency Stop (`Ctrl + Alt + Escape` or tray action).
 
 The product is uncompromisingly safe: AI output is untrusted and bounded to an allowlisted UI action vocabulary (`focus`, `click`, `invoke`, `type_text`, `key_press`, `hotkey`, `scroll`, `select`, `toggle`, and `wait`). Keystrokes into sensitive controls (passwords, PINs, tokens) are blocked at the executor boundary. Sensitive numbers and secret keys are automatically redacted. All actions revalidate the captured HWND, process, live UIA fingerprint, hierarchy, state, and bounds, then check a typed postcondition. Every credential is encrypted in Windows Credential Manager.
 
@@ -119,4 +119,4 @@ DeskFlow observes only the explicitly captured foreground target. Planning sends
 
 ## Project status
 
-All roadmap phases (Phases 1–12) are fully implemented and verified. Automated test suites pass 100% across native Rust unit/benchmark tests and React/TypeScript Vitest suites. Distributable NSIS and MSI packages are configured for release.
+All roadmap phases (Phases 1–17) are implemented. The automated frontend and Rust test suites pass; the remaining Windows, hardware, and provider smoke checks are documented in [Testing](docs/TESTING.md). Distributable NSIS and MSI packages are configured for release.

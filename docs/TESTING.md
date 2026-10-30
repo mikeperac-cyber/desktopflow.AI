@@ -161,4 +161,4 @@ The specific-HWND capture helper exists only for local developer probes and is n
 npm run tauri build
 ```
 
-The release produces `src-tauri\target\release\bundle\nsis\DeskFlow AI_0.1.0_x64-setup.exe` and `src-tauri\target\release\bundle\msi\DeskFlow AI_0.1.0_x64_en-US.msi`. Verify both files exist, record SHA-256 hashes, and attach them to the matching GitHub release. MSI packaging also depends on the Windows VBSCRIPT optional feature documented by Tauri.
+The release produces `src-tauri\target\release\bundle\nsis\DeskFlow AI_1.1.0_x64-setup.exe` and `src-tauri\target\release\bundle\msi\DeskFlow AI_1.1.0_x64_en-US.msi`. Verify both files exist, record SHA-256 hashes, and attach them to the matching GitHub release. MSI packaging also depends on the Windows VBSCRIPT optional feature documented by Tauri.

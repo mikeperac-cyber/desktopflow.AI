@@ -96,7 +96,7 @@ After each mutation, the executor polls its typed postcondition and marks the st
 
 ## Security evolution
 
-Phases 1–12 implement the complete pipeline through verified action, bounded fresh-state recovery, granular step-level approval policy, emergency stop input release, sensitive field & keyword redaction, memory-bounded diagnostic logging, and accessible high-contrast UI polish. The runtime enforces these gates:
+Phases 1–17 implement the complete pipeline through verified action, bounded fresh-state recovery, granular step-level approval policy, emergency stop input release, sensitive field & keyword redaction, memory-bounded diagnostic logging, accessible high-contrast UI polish, local planning, workflow recording and scheduling, and bounded operator memory. The runtime enforces these gates:
 
 ```text
 User instruction
